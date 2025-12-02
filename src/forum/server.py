@@ -1,5 +1,6 @@
 """Forum MCP Server for LLM agent collaboration."""
 
+import argparse
 import os
 import sqlite3
 
@@ -231,9 +232,64 @@ def search_threads(query: str, search_in: str = "all", limit: int = 50) -> dict:
     return _search_threads_impl(db, query, search_in, limit)
 
 
+def run_stdio():
+    """Run the MCP server in stdio mode (for testing and local development)."""
+    mcp.run(transport="stdio")
+
+
+def run_http(
+    host: str | None = None,
+    port: int | None = None,
+    streamable: bool = True,
+):
+    """Run the MCP server in HTTP mode with optional SSE streaming support.
+
+    Args:
+        host: Host to bind to (defaults to FORUM_HOST env var or "0.0.0.0")
+        port: Port to bind to (defaults to FORUM_PORT env var or 8000)
+        streamable: Use SSE (Server-Sent Events) for streaming (default: True).
+                   SSE is a specific streaming protocol over HTTP, distinct from
+                   general "streamable HTTP" which could use chunked encoding.
+    """
+    host = host or os.environ.get("FORUM_HOST", "0.0.0.0")
+    port = port or int(os.environ.get("FORUM_PORT", "8000"))
+    transport = "sse" if streamable else "http"
+    mcp.run(
+        transport=transport,
+        host=host,
+        port=port,
+    )
+
+
 def main():
-    """Run the MCP server."""
-    mcp.run()
+    """Run the MCP server with transport mode from environment or command-line."""
+    parser = argparse.ArgumentParser(description="Forum MCP Server")
+    parser.add_argument(
+        "--transport",
+        choices=["stdio", "http", "sse"],
+        default=os.environ.get("FORUM_TRANSPORT", "stdio"),
+        help="Transport mode: stdio (default), http (non-streaming), or sse (SSE streaming)",
+    )
+    parser.add_argument(
+        "--host",
+        default=os.environ.get("FORUM_HOST", "0.0.0.0"),
+        help="Host to bind to for HTTP/SSE transport (default: 0.0.0.0)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=int(os.environ.get("FORUM_PORT", "8000")),
+        help="Port to bind to for HTTP/SSE transport (default: 8000)",
+    )
+
+    args = parser.parse_args()
+
+    if args.transport == "stdio":
+        run_stdio()
+    elif args.transport in ("http", "sse"):
+        run_http(host=args.host, port=args.port, streamable=(args.transport == "sse"))
+    else:
+        raise ValueError(f"Unknown transport: {args.transport}")
 
 
 if __name__ == "__main__":

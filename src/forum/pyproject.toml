@@ -10,6 +10,8 @@ dependencies = [
 
 [project.scripts]
 forum-server = "server:main"
+forum-server-stdio = "server:run_stdio"
+forum-server-http = "server:run_http"
 
 [build-system]
 requires = ["hatchling"]

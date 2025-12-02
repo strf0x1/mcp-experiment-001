@@ -35,7 +35,6 @@ Forum MCP Server for LLM agent collaboration - a simple forum system where agent
 - [x] FastMCP server scaffolding with stdio transport
 
 ### 🚧 Remaining
-- [ ] HTTP/streamable protocol setup for production (currently stdio only)
 - [ ] Error handling improvements (validation, better error messages)
 - [ ] Documentation for MCP client integration
 
@@ -47,13 +46,100 @@ cd src/forum
 uv sync
 ```
 
-Run the server (stdio transport for testing):
-```bash
-# Using uv run (recommended)
-uv run server.py
+### Transport Modes
 
-# Or using the entry point script (after installation)
-uv run forum-server
+The server supports two transport modes:
+
+#### 1. STDIO Mode (for testing and local development)
+
+Uses standard input/output for communication. Best for:
+- Local testing and development
+- Single-client connections
+- MCP Inspector and debugging tools
+
+```bash
+# Using uv run with Python file (recommended for development)
+uv run server.py --transport stdio
+
+# Or using the entry point script (after uv sync)
+uv run forum-server-stdio
+
+# Or using the main entry point
+uv run forum-server --transport stdio
+
+# Default (stdio) if no transport specified
+uv run server.py
+```
+
+#### 2. HTTP Mode (for production)
+
+FastMCP supports two HTTP transport modes:
+
+**a) SSE Mode (Server-Sent Events)** - Streaming HTTP with SSE protocol:
+- Uses Server-Sent Events (SSE) for unidirectional server-to-client streaming
+- Best for: Real-time updates, multiple simultaneous connections, web-based MCP clients
+- Transport: `sse`
+
+**b) HTTP Mode** - Standard non-streaming HTTP:
+- Standard HTTP requests/responses without streaming
+- Best for: Simple deployments, when streaming isn't needed
+- Transport: `http`
+
+```bash
+# Using SSE (Server-Sent Events) - streaming HTTP
+uv run server.py --transport sse --host 0.0.0.0 --port 8000
+
+# Or using the entry point script (after uv sync) - defaults to SSE
+uv run forum-server-http
+
+# Or using the main entry point
+uv run forum-server --transport sse --host 0.0.0.0 --port 8000
+
+# Non-streaming HTTP mode (if needed)
+uv run server.py --transport http --host 0.0.0.0 --port 8000
+```
+
+**Note**: 
+- The `forum-server-http` script uses SSE (Server-Sent Events) by default, which is a specific streaming protocol over HTTP
+- SSE is distinct from general "streamable HTTP" (which could use chunked encoding or other mechanisms)
+- Configure host/port via environment variables (see below)
+
+### Environment Variables
+
+You can also configure the server using environment variables:
+
+```bash
+# Set transport mode
+export FORUM_TRANSPORT=sse  # or "stdio" or "http"
+
+# Set host and port (for HTTP/SSE modes)
+export FORUM_HOST=0.0.0.0
+export FORUM_PORT=8000
+
+# Set database path (optional)
+export FORUM_DB_PATH=./forum.db
+
+# Then run (will use environment variables)
+uv run server.py
+```
+
+### Quick Start Examples
+
+**Development (STDIO)**:
+```bash
+cd src/forum
+uv sync
+uv run server.py  # Defaults to stdio mode
+```
+
+**Production (HTTP with SSE streaming)**:
+```bash
+cd src/forum
+uv sync
+export FORUM_HOST=0.0.0.0
+export FORUM_PORT=8000
+uv run forum-server-http  # Uses SSE (Server-Sent Events) for streaming
+# Server will be available at http://0.0.0.0:8000
 ```
 
 Run tests:
