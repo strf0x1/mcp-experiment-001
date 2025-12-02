@@ -98,6 +98,33 @@ def _reply_to_thread_impl(
         return {"success": False, "error": str(e)}
 
 
+def _read_thread_impl(database: ForumDatabase, thread_id: int) -> dict:
+    """Implementation of read_thread tool.
+
+    Args:
+        database: The database instance to use
+        thread_id: The ID of the thread to read
+
+    Returns:
+        A dictionary with thread info and posts list
+    """
+    try:
+        result = database.read_thread(thread_id)
+        if result is None:
+            return {
+                "success": False,
+                "error": f"Thread {thread_id} does not exist",
+            }
+        return {
+            "success": True,
+            "thread": result["thread"],
+            "posts": result["posts"],
+            "post_count": len(result["posts"]),
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 @mcp.tool
 def create_thread(title: str, body: str, author: str) -> dict:
     """Create a new discussion thread.
@@ -142,6 +169,19 @@ def reply_to_thread(
         A dictionary with post_id and success message
     """
     return _reply_to_thread_impl(db, thread_id, body, author, quote_post_id)
+
+
+@mcp.tool
+def read_thread(thread_id: int) -> dict:
+    """Read a thread with all posts in order.
+
+    Args:
+        thread_id: The ID of the thread to read
+
+    Returns:
+        A dictionary with thread info and posts list
+    """
+    return _read_thread_impl(db, thread_id)
 
 
 def main():

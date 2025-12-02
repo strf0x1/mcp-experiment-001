@@ -6,7 +6,12 @@ import tempfile
 import pytest
 
 from database import ForumDatabase
-from server import _create_thread_impl, _list_threads_impl, _reply_to_thread_impl
+from server import (
+    _create_thread_impl,
+    _list_threads_impl,
+    _read_thread_impl,
+    _reply_to_thread_impl,
+)
 
 
 @pytest.fixture
@@ -308,3 +313,145 @@ class TestReplyToThread:
             == reply3["thread_id"]
             == thread_id
         )
+
+
+class TestReadThread:
+    """Tests for read_thread tool."""
+
+    def test_read_thread_success(self, test_db_with_threads):
+        """Test successful read of thread with no posts."""
+        threads = test_db_with_threads.list_threads()
+        thread_id = threads[0]["id"]
+
+        result = _read_thread_impl(test_db_with_threads, thread_id)
+
+        assert result["success"] is True
+        assert "thread" in result
+        assert "posts" in result
+        assert "post_count" in result
+        assert result["post_count"] == 0
+        assert result["thread"]["id"] == thread_id
+        assert "title" in result["thread"]
+        assert "body" in result["thread"]
+        assert "author" in result["thread"]
+        assert "created_at" in result["thread"]
+        assert "updated_at" in result["thread"]
+
+    def test_read_thread_with_posts(self, temp_db):
+        """Test reading thread with multiple posts."""
+        # Create a thread
+        thread_id = temp_db.create_thread("Test Thread", "Initial body", "author1")
+
+        # Add some posts
+        post1_id = temp_db.create_post(thread_id, "First reply", "author2")
+        post2_id = temp_db.create_post(thread_id, "Second reply", "author3")
+        post3_id = temp_db.create_post(thread_id, "Third reply", "author4")
+
+        result = _read_thread_impl(temp_db, thread_id)
+
+        assert result["success"] is True
+        assert result["post_count"] == 3
+        assert len(result["posts"]) == 3
+
+        # Check posts are in order (oldest first)
+        assert result["posts"][0]["id"] == post1_id
+        assert result["posts"][1]["id"] == post2_id
+        assert result["posts"][2]["id"] == post3_id
+
+        # Check post structure
+        post = result["posts"][0]
+        assert "id" in post
+        assert "thread_id" in post
+        assert "body" in post
+        assert "author" in post
+        assert "quote_post_id" in post
+        assert "created_at" in post
+        assert post["thread_id"] == thread_id
+        assert post["body"] == "First reply"
+        assert post["author"] == "author2"
+
+    def test_read_thread_with_quoted_posts(self, temp_db):
+        """Test reading thread with posts that quote other posts."""
+        thread_id = temp_db.create_thread("Test Thread", "Initial body", "author1")
+
+        # Create first post
+        first_post_id = temp_db.create_post(thread_id, "First reply", "author2")
+
+        # Create a reply quoting the first post
+        quoted_post_id = temp_db.create_post(
+            thread_id, "This quotes the first reply", "author3", quote_post_id=first_post_id
+        )
+
+        result = _read_thread_impl(temp_db, thread_id)
+
+        assert result["success"] is True
+        assert result["post_count"] == 2
+
+        # Check that the quoted post has the quote_post_id set
+        quoted_post = result["posts"][1]
+        assert quoted_post["id"] == quoted_post_id
+        assert quoted_post["quote_post_id"] == first_post_id
+
+    def test_read_thread_nonexistent(self, temp_db):
+        """Test reading non-existent thread."""
+        result = _read_thread_impl(temp_db, 99999)
+
+        assert result["success"] is False
+        assert "error" in result
+        assert "does not exist" in result["error"].lower()
+
+    def test_read_thread_empty_posts(self, temp_db):
+        """Test reading thread with no posts (only initial post body)."""
+        thread_id = temp_db.create_thread("Test Thread", "Initial body", "author1")
+
+        result = _read_thread_impl(temp_db, thread_id)
+
+        assert result["success"] is True
+        assert result["post_count"] == 0
+        assert result["posts"] == []
+        assert result["thread"]["body"] == "Initial body"
+
+    def test_read_thread_posts_ordered_by_created_at(self, temp_db):
+        """Test that posts are returned in chronological order."""
+        import time
+
+        thread_id = temp_db.create_thread("Test Thread", "Initial body", "author1")
+
+        # Create posts with small delays to ensure different timestamps
+        post1_id = temp_db.create_post(thread_id, "First", "author1")
+        time.sleep(0.01)
+        post2_id = temp_db.create_post(thread_id, "Second", "author2")
+        time.sleep(0.01)
+        post3_id = temp_db.create_post(thread_id, "Third", "author3")
+
+        result = _read_thread_impl(temp_db, thread_id)
+
+        assert result["success"] is True
+        assert result["post_count"] == 3
+
+        # Posts should be in chronological order (oldest first)
+        posts = result["posts"]
+        assert posts[0]["id"] == post1_id
+        assert posts[1]["id"] == post2_id
+        assert posts[2]["id"] == post3_id
+
+        # Verify timestamps are in ascending order
+        assert posts[0]["created_at"] <= posts[1]["created_at"]
+        assert posts[1]["created_at"] <= posts[2]["created_at"]
+
+    def test_read_thread_thread_info_complete(self, temp_db):
+        """Test that thread info contains all expected fields."""
+        thread_id = temp_db.create_thread("Test Title", "Test Body", "test_author")
+
+        result = _read_thread_impl(temp_db, thread_id)
+
+        assert result["success"] is True
+        thread = result["thread"]
+        assert thread["id"] == thread_id
+        assert thread["title"] == "Test Title"
+        assert thread["body"] == "Test Body"
+        assert thread["author"] == "test_author"
+        assert "created_at" in thread
+        assert "updated_at" in thread
+        assert thread["created_at"] is not None
+        assert thread["updated_at"] is not None

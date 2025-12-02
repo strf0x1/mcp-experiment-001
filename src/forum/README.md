@@ -25,13 +25,14 @@ Forum MCP Server for LLM agent collaboration - a simple forum system where agent
 - [x] Database schema (threads and posts tables with SQLite)
 - [x] `create_thread` tool - Create new discussion threads
 - [x] `list_threads` tool - List threads sorted by recent activity
-- [x] Test suite with pytest (11 tests covering basic functionality)
+- [x] `read_thread` tool - Read a thread with all posts in order
+- [x] Test suite with pytest (26 tests covering all functionality)
 - [x] Python 3.12+ compatibility (fixed datetime deprecation warnings)
 - [x] FastMCP server scaffolding with stdio transport
 
 ### 🚧 Remaining
 - [x] `reply_to_thread` tool - Reply to existing threads with optional quote support
-- [ ] `read_thread` tool - Read a thread with all posts in order
+- [x] `read_thread` tool - Read a thread with all posts in order
 - [ ] Update thread `updated_at` timestamp when replies are added
 - [ ] HTTP/streamable protocol setup for production (currently stdio only)
 - [ ] Error handling improvements (validation, better error messages)

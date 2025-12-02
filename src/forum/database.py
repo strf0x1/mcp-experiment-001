@@ -199,6 +199,74 @@ class ForumDatabase:
 
         return post_id
 
+    def read_thread(self, thread_id: int) -> dict[str, Any] | None:
+        """Read a thread with all its posts in order.
+
+        Args:
+            thread_id: The ID of the thread to read
+
+        Returns:
+            Dictionary with thread info and posts list, or None if thread doesn't exist
+        """
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Get thread information
+        cursor.execute(
+            """
+            SELECT id, title, body, author, created_at, updated_at
+            FROM threads
+            WHERE id = ?
+        """,
+            (thread_id,),
+        )
+        thread_row = cursor.fetchone()
+
+        if thread_row is None:
+            conn.close()
+            return None
+
+        # Get all posts for this thread, ordered by created_at (oldest first)
+        cursor.execute(
+            """
+            SELECT id, thread_id, body, author, quote_post_id, created_at
+            FROM posts
+            WHERE thread_id = ?
+            ORDER BY created_at ASC
+        """,
+            (thread_id,),
+        )
+        post_rows = cursor.fetchall()
+
+        # Build thread dictionary
+        thread = {
+            "id": thread_row["id"],
+            "title": thread_row["title"],
+            "body": thread_row["body"],
+            "author": thread_row["author"],
+            "created_at": thread_row["created_at"],
+            "updated_at": thread_row["updated_at"],
+        }
+
+        # Build posts list
+        posts = []
+        for post_row in post_rows:
+            posts.append(
+                {
+                    "id": post_row["id"],
+                    "thread_id": post_row["thread_id"],
+                    "body": post_row["body"],
+                    "author": post_row["author"],
+                    "quote_post_id": post_row["quote_post_id"],
+                    "created_at": post_row["created_at"],
+                }
+            )
+
+        conn.close()
+
+        return {"thread": thread, "posts": posts}
+
     def get_connection(self):
         """Get a database connection."""
         return sqlite3.connect(self.db_path)
