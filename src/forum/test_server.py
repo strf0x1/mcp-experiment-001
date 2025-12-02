@@ -6,7 +6,7 @@ import tempfile
 import pytest
 
 from database import ForumDatabase
-from server import _create_thread_impl, _list_threads_impl
+from server import _create_thread_impl, _list_threads_impl, _reply_to_thread_impl
 
 
 @pytest.fixture
@@ -157,3 +157,154 @@ class TestListThreads:
         assert result["success"] is True
         assert result["count"] == 50  # Default limit
         assert len(result["threads"]) == 50
+
+
+class TestReplyToThread:
+    """Tests for reply_to_thread tool."""
+
+    def test_reply_to_thread_success(self, test_db_with_threads):
+        """Test successful reply to thread."""
+        # Get the first thread ID
+        threads = test_db_with_threads.list_threads()
+        thread_id = threads[0]["id"]
+
+        result = _reply_to_thread_impl(
+            test_db_with_threads, thread_id, "This is a reply", "test_author"
+        )
+
+        assert result["success"] is True
+        assert "post_id" in result
+        assert result["post_id"] > 0
+        assert result["thread_id"] == thread_id
+        assert "message" in result
+        assert "test_author" in result["message"]
+        assert str(thread_id) in result["message"]
+
+    def test_reply_to_thread_with_quote(self, test_db_with_threads):
+        """Test reply to thread with quote."""
+        # Get the first thread ID
+        threads = test_db_with_threads.list_threads()
+        thread_id = threads[0]["id"]
+
+        # Create a first reply
+        first_reply = _reply_to_thread_impl(
+            test_db_with_threads, thread_id, "First reply", "author1"
+        )
+        assert first_reply["success"] is True
+        quote_post_id = first_reply["post_id"]
+
+        # Create a second reply quoting the first
+        result = _reply_to_thread_impl(
+            test_db_with_threads,
+            thread_id,
+            "This quotes the first reply",
+            "author2",
+            quote_post_id=quote_post_id,
+        )
+
+        assert result["success"] is True
+        assert result["post_id"] > quote_post_id  # New post should have higher ID
+        assert result["thread_id"] == thread_id
+
+    def test_reply_to_thread_nonexistent_thread(self, temp_db):
+        """Test reply to non-existent thread."""
+        result = _reply_to_thread_impl(
+            temp_db, 99999, "This should fail", "author"
+        )
+
+        assert result["success"] is False
+        assert "error" in result
+        assert "does not exist" in result["error"].lower()
+
+    def test_reply_to_thread_empty_body(self, test_db_with_threads):
+        """Test reply with empty body."""
+        threads = test_db_with_threads.list_threads()
+        thread_id = threads[0]["id"]
+
+        result = _reply_to_thread_impl(
+            test_db_with_threads, thread_id, "", "author"
+        )
+
+        # Should still succeed (empty body is valid per design)
+        assert result["success"] is True
+        assert result["post_id"] > 0
+
+    def test_reply_to_thread_empty_author(self, test_db_with_threads):
+        """Test reply with empty author."""
+        threads = test_db_with_threads.list_threads()
+        thread_id = threads[0]["id"]
+
+        result = _reply_to_thread_impl(
+            test_db_with_threads, thread_id, "Reply body", ""
+        )
+
+        # Should still succeed (empty author is valid per design)
+        assert result["success"] is True
+        assert result["post_id"] > 0
+
+    def test_reply_to_thread_updates_thread_timestamp(self, temp_db):
+        """Test that replying to a thread updates its updated_at timestamp."""
+        import time
+
+        # Create a thread
+        thread_id = temp_db.create_thread("Test Thread", "Initial body", "author1")
+        threads_before = temp_db.list_threads()
+        original_updated_at = threads_before[0]["updated_at"]
+
+        # Wait a bit to ensure timestamp difference
+        time.sleep(0.01)
+
+        # Reply to the thread
+        result = _reply_to_thread_impl(
+            temp_db, thread_id, "Reply body", "author2"
+        )
+
+        assert result["success"] is True
+
+        # Check that thread's updated_at was updated
+        threads_after = temp_db.list_threads()
+        new_updated_at = threads_after[0]["updated_at"]
+
+        # The updated_at should be different (newer)
+        assert new_updated_at != original_updated_at
+        # In ISO format, newer timestamps should be lexicographically greater
+        assert new_updated_at > original_updated_at
+
+    def test_reply_to_thread_invalid_quote_post_id(self, test_db_with_threads):
+        """Test reply with invalid quote_post_id."""
+        threads = test_db_with_threads.list_threads()
+        thread_id = threads[0]["id"]
+
+        result = _reply_to_thread_impl(
+            test_db_with_threads,
+            thread_id,
+            "Reply with invalid quote",
+            "author",
+            quote_post_id=99999,
+        )
+
+        assert result["success"] is False
+        assert "error" in result
+
+    def test_reply_to_thread_multiple_replies(self, temp_db):
+        """Test multiple replies to the same thread."""
+        thread_id = temp_db.create_thread("Test Thread", "Initial body", "author1")
+
+        # Create multiple replies
+        reply1 = _reply_to_thread_impl(temp_db, thread_id, "Reply 1", "author2")
+        reply2 = _reply_to_thread_impl(temp_db, thread_id, "Reply 2", "author3")
+        reply3 = _reply_to_thread_impl(temp_db, thread_id, "Reply 3", "author4")
+
+        assert reply1["success"] is True
+        assert reply2["success"] is True
+        assert reply3["success"] is True
+
+        # All replies should have different post IDs
+        assert reply1["post_id"] < reply2["post_id"] < reply3["post_id"]
+        # All should be for the same thread
+        assert (
+            reply1["thread_id"]
+            == reply2["thread_id"]
+            == reply3["thread_id"]
+            == thread_id
+        )

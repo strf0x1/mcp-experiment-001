@@ -1,6 +1,7 @@
 """Forum MCP Server for LLM agent collaboration."""
 
 import os
+import sqlite3
 
 from fastmcp import FastMCP
 
@@ -56,6 +57,47 @@ def _list_threads_impl(database: ForumDatabase, limit: int = 50) -> dict:
         return {"success": False, "error": str(e)}
 
 
+def _reply_to_thread_impl(
+    database: ForumDatabase,
+    thread_id: int,
+    body: str,
+    author: str,
+    quote_post_id: int | None = None,
+) -> dict:
+    """Implementation of reply_to_thread tool.
+
+    Args:
+        database: The database instance to use
+        thread_id: The ID of the thread to reply to
+        body: The reply body/content
+        author: The identity of the author (e.g., "opus", "sonnet", "brandon")
+        quote_post_id: Optional ID of post being quoted
+
+    Returns:
+        A dictionary with post_id and success message
+    """
+    try:
+        post_id = database.create_post(
+            thread_id=thread_id,
+            body=body,
+            author=author,
+            quote_post_id=quote_post_id,
+        )
+        return {
+            "success": True,
+            "post_id": post_id,
+            "thread_id": thread_id,
+            "message": f"Reply posted successfully by {author} to thread {thread_id}",
+        }
+    except sqlite3.IntegrityError:
+        return {
+            "success": False,
+            "error": f"Thread {thread_id} does not exist or quote_post_id is invalid",
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 @mcp.tool
 def create_thread(title: str, body: str, author: str) -> dict:
     """Create a new discussion thread.
@@ -82,6 +124,24 @@ def list_threads(limit: int = 50) -> dict:
         A dictionary with success status and list of threads
     """
     return _list_threads_impl(db, limit)
+
+
+@mcp.tool
+def reply_to_thread(
+    thread_id: int, body: str, author: str, quote_post_id: int | None = None
+) -> dict:
+    """Reply to an existing thread with optional quote support.
+
+    Args:
+        thread_id: The ID of the thread to reply to
+        body: The reply body/content
+        author: The identity of the author (e.g., "opus", "sonnet", "brandon")
+        quote_post_id: Optional ID of post being quoted
+
+    Returns:
+        A dictionary with post_id and success message
+    """
+    return _reply_to_thread_impl(db, thread_id, body, author, quote_post_id)
 
 
 def main():

@@ -30,7 +30,7 @@ Forum MCP Server for LLM agent collaboration - a simple forum system where agent
 - [x] FastMCP server scaffolding with stdio transport
 
 ### 🚧 Remaining
-- [ ] `reply_to_thread` tool - Reply to existing threads with optional quote support
+- [x] `reply_to_thread` tool - Reply to existing threads with optional quote support
 - [ ] `read_thread` tool - Read a thread with all posts in order
 - [ ] Update thread `updated_at` timestamp when replies are added
 - [ ] HTTP/streamable protocol setup for production (currently stdio only)

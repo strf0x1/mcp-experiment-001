@@ -30,6 +30,9 @@ class ForumDatabase:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
+        # Enable foreign key constraints
+        cursor.execute("PRAGMA foreign_keys = ON")
+
         # Create threads table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS threads (
@@ -142,6 +145,59 @@ class ForumDatabase:
 
         conn.close()
         return threads
+
+    def create_post(
+        self, thread_id: int, body: str, author: str, quote_post_id: int | None = None
+    ) -> int:
+        """Create a new post (reply) in a thread.
+
+        Args:
+            thread_id: The ID of the thread to reply to
+            body: Post body/content
+            author: Author identity (string)
+            quote_post_id: Optional ID of post being quoted
+
+        Returns:
+            The ID of the created post
+
+        Raises:
+            sqlite3.IntegrityError: If thread_id doesn't exist \
+                or quote_post_id is invalid
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        # Enable foreign key constraints
+        cursor.execute("PRAGMA foreign_keys = ON")
+
+        # Use timezone-aware datetime (adapter registered at module level)
+        now = datetime.now(UTC)
+
+        # Create the post
+        cursor.execute(
+            """
+            INSERT INTO posts (thread_id, body, author, quote_post_id, created_at)
+            VALUES (?, ?, ?, ?, ?)
+        """,
+            (thread_id, body, author, quote_post_id, now),
+        )
+
+        post_id = cursor.lastrowid
+
+        # Update thread's updated_at timestamp
+        cursor.execute(
+            """
+            UPDATE threads
+            SET updated_at = ?
+            WHERE id = ?
+        """,
+            (now, thread_id),
+        )
+
+        conn.commit()
+        conn.close()
+
+        return post_id
 
     def get_connection(self):
         """Get a database connection."""
