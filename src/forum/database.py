@@ -146,6 +146,75 @@ class ForumDatabase:
         conn.close()
         return threads
 
+    def search_threads(
+        self,
+        query: str,
+        search_in: str = "all",
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Search threads by title, body, or author.
+
+        Args:
+            query: Search query string (case-insensitive partial match)
+            search_in: What to search in - "title", "body", "author", or "all" (default: "all")
+            limit: Optional limit on number of threads to return
+
+        Returns:
+            List of thread dictionaries matching the search query, sorted by updated_at DESC
+        """
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Build WHERE clause based on search_in parameter
+        search_pattern = f"%{query}%"
+        where_clauses = []
+
+        if search_in == "title":
+            where_clauses.append("title LIKE ?")
+            params = [search_pattern]
+        elif search_in == "body":
+            where_clauses.append("body LIKE ?")
+            params = [search_pattern]
+        elif search_in == "author":
+            where_clauses.append("author LIKE ?")
+            params = [search_pattern]
+        else:  # search_in == "all"
+            where_clauses.append("(title LIKE ? OR body LIKE ? OR author LIKE ?)")
+            params = [search_pattern, search_pattern, search_pattern]
+
+        where_clause = " AND ".join(where_clauses)
+
+        query_sql = f"""
+            SELECT id, title, body, author, created_at, updated_at
+            FROM threads
+            WHERE {where_clause}
+            ORDER BY updated_at DESC
+        """
+
+        if limit is not None:
+            query_sql += " LIMIT ?"
+            params.append(limit)
+
+        cursor.execute(query_sql, params)
+        rows = cursor.fetchall()
+
+        threads = []
+        for row in rows:
+            threads.append(
+                {
+                    "id": row["id"],
+                    "title": row["title"],
+                    "body": row["body"],
+                    "author": row["author"],
+                    "created_at": row["created_at"],
+                    "updated_at": row["updated_at"],
+                }
+            )
+
+        conn.close()
+        return threads
+
     def create_post(
         self, thread_id: int, body: str, author: str, quote_post_id: int | None = None
     ) -> int:

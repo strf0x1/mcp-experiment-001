@@ -11,6 +11,7 @@ from server import (
     _list_threads_impl,
     _read_thread_impl,
     _reply_to_thread_impl,
+    _search_threads_impl,
 )
 
 
@@ -455,3 +456,194 @@ class TestReadThread:
         assert "updated_at" in thread
         assert thread["created_at"] is not None
         assert thread["updated_at"] is not None
+
+
+class TestSearchThreads:
+    """Tests for search_threads tool."""
+
+    def test_search_threads_empty_query(self, test_db_with_threads):
+        """Test search with empty query (should match all threads)."""
+        result = _search_threads_impl(test_db_with_threads, "")
+
+        assert result["success"] is True
+        assert result["count"] == 3
+        assert len(result["threads"]) == 3
+        assert result["query"] == ""
+
+    def test_search_threads_by_title(self, temp_db):
+        """Test searching threads by title."""
+        temp_db.create_thread("Python Programming", "Body about Python", "author1")
+        temp_db.create_thread("JavaScript Basics", "Body about JS", "author2")
+        temp_db.create_thread("Python Advanced", "More Python content", "author1")
+
+        result = _search_threads_impl(temp_db, "Python", search_in="title")
+
+        assert result["success"] is True
+        assert result["count"] == 2
+        assert len(result["threads"]) == 2
+        assert all("Python" in thread["title"] for thread in result["threads"])
+        assert result["query"] == "Python"
+
+    def test_search_threads_by_body(self, temp_db):
+        """Test searching threads by body content."""
+        temp_db.create_thread("Title 1", "Discussion about databases", "author1")
+        temp_db.create_thread("Title 2", "Discussion about APIs", "author2")
+        temp_db.create_thread("Title 3", "More about databases", "author1")
+
+        result = _search_threads_impl(temp_db, "databases", search_in="body")
+
+        assert result["success"] is True
+        assert result["count"] == 2
+        assert len(result["threads"]) == 2
+        assert all("databases" in thread["body"] for thread in result["threads"])
+
+    def test_search_threads_by_author(self, temp_db):
+        """Test searching threads by author."""
+        temp_db.create_thread("Thread 1", "Body 1", "opus")
+        temp_db.create_thread("Thread 2", "Body 2", "sonnet")
+        temp_db.create_thread("Thread 3", "Body 3", "opus")
+
+        result = _search_threads_impl(temp_db, "opus", search_in="author")
+
+        assert result["success"] is True
+        assert result["count"] == 2
+        assert len(result["threads"]) == 2
+        assert all(thread["author"] == "opus" for thread in result["threads"])
+
+    def test_search_threads_all_fields(self, temp_db):
+        """Test searching threads across all fields (default)."""
+        temp_db.create_thread("Python Thread", "Body about Python", "author1")
+        temp_db.create_thread("JavaScript Thread", "Body about Python too", "author2")
+        temp_db.create_thread("Other Thread", "Body about something else", "python_author")
+
+        result = _search_threads_impl(temp_db, "Python")
+
+        assert result["success"] is True
+        assert result["count"] == 3
+        assert len(result["threads"]) == 3
+        # All threads should have "Python" (case-insensitive) in title, body, or author
+        query_lower = "python"
+        assert all(
+            query_lower in thread["title"].lower()
+            or query_lower in thread["body"].lower()
+            or query_lower in thread["author"].lower()
+            for thread in result["threads"]
+        )
+
+    def test_search_threads_case_insensitive(self, temp_db):
+        """Test that search is case-insensitive."""
+        temp_db.create_thread("Python Programming", "Body content", "author1")
+        temp_db.create_thread("JavaScript Basics", "Body content", "author2")
+
+        # Search with different case
+        result = _search_threads_impl(temp_db, "python", search_in="title")
+
+        assert result["success"] is True
+        assert result["count"] == 1
+        assert result["threads"][0]["title"] == "Python Programming"
+
+    def test_search_threads_partial_match(self, temp_db):
+        """Test that search supports partial matches."""
+        temp_db.create_thread("Python Programming Guide", "Body", "author1")
+        temp_db.create_thread("Python Basics", "Body", "author2")
+        temp_db.create_thread("JavaScript Guide", "Body", "author3")
+
+        result = _search_threads_impl(temp_db, "Guide", search_in="title")
+
+        assert result["success"] is True
+        assert result["count"] == 2
+        assert all("Guide" in thread["title"] for thread in result["threads"])
+
+    def test_search_threads_no_matches(self, temp_db):
+        """Test search with no matching threads."""
+        temp_db.create_thread("Python Thread", "Body", "author1")
+        temp_db.create_thread("JavaScript Thread", "Body", "author2")
+
+        result = _search_threads_impl(temp_db, "Ruby", search_in="title")
+
+        assert result["success"] is True
+        assert result["count"] == 0
+        assert result["threads"] == []
+        assert result["query"] == "Ruby"
+
+    def test_search_threads_limit(self, temp_db):
+        """Test search with limit parameter."""
+        # Create multiple threads matching the query
+        for i in range(10):
+            temp_db.create_thread(f"Python Thread {i}", "Body", "author1")
+
+        result = _search_threads_impl(temp_db, "Python", search_in="title", limit=5)
+
+        assert result["success"] is True
+        assert result["count"] == 5
+        assert len(result["threads"]) == 5
+
+    def test_search_threads_limit_zero(self, temp_db):
+        """Test search with limit of 0."""
+        temp_db.create_thread("Python Thread", "Body", "author1")
+
+        result = _search_threads_impl(temp_db, "Python", search_in="title", limit=0)
+
+        assert result["success"] is True
+        assert result["count"] == 0
+        assert result["threads"] == []
+
+    def test_search_threads_invalid_search_in(self, temp_db):
+        """Test search with invalid search_in parameter."""
+        result = _search_threads_impl(temp_db, "query", search_in="invalid")
+
+        assert result["success"] is False
+        assert "error" in result
+        assert "search_in" in result["error"].lower()
+
+    def test_search_threads_empty_database(self, temp_db):
+        """Test search when database is empty."""
+        result = _search_threads_impl(temp_db, "anything")
+
+        assert result["success"] is True
+        assert result["count"] == 0
+        assert result["threads"] == []
+
+    def test_search_threads_sorted_by_recent_activity(self, temp_db):
+        """Test that search results are sorted by recent activity."""
+        import time
+
+        temp_db.create_thread("Python Old", "Body", "author1")
+        time.sleep(0.01)
+        temp_db.create_thread("Python New", "Body", "author2")
+        time.sleep(0.01)
+        temp_db.create_thread("Python Middle", "Body", "author3")
+
+        result = _search_threads_impl(temp_db, "Python", search_in="title")
+
+        assert result["success"] is True
+        assert result["count"] == 3
+
+        # Results should be sorted by updated_at DESC (most recent first)
+        threads = result["threads"]
+        assert threads[0]["title"] == "Python Middle"  # Last created
+        assert threads[1]["title"] == "Python New"
+        assert threads[2]["title"] == "Python Old"
+
+    def test_search_threads_multiple_matches_in_same_field(self, temp_db):
+        """Test search when query appears multiple times in same field."""
+        temp_db.create_thread("Python Python Python", "Body", "author1")
+        temp_db.create_thread("Python Basics", "Body", "author2")
+
+        result = _search_threads_impl(temp_db, "Python", search_in="title")
+
+        assert result["success"] is True
+        assert result["count"] == 2
+        assert all("Python" in thread["title"] for thread in result["threads"])
+
+    def test_search_threads_special_characters(self, temp_db):
+        """Test search with special characters in query."""
+        temp_db.create_thread("C++ Programming", "Body", "author1")
+        temp_db.create_thread("C# Basics", "Body", "author2")
+
+        # Search for C++ (should escape properly)
+        result = _search_threads_impl(temp_db, "C++", search_in="title")
+
+        assert result["success"] is True
+        assert result["count"] == 1
+        assert result["threads"][0]["title"] == "C++ Programming"

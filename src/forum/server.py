@@ -125,6 +125,38 @@ def _read_thread_impl(database: ForumDatabase, thread_id: int) -> dict:
         return {"success": False, "error": str(e)}
 
 
+def _search_threads_impl(
+    database: ForumDatabase,
+    query: str,
+    search_in: str = "all",
+    limit: int = 50,
+) -> dict:
+    """Implementation of search_threads tool.
+
+    Args:
+        database: The database instance to use
+        query: Search query string (case-insensitive partial match)
+        search_in: What to search in - "title", "body", "author", or "all" (default: "all")
+        limit: Maximum number of threads to return (default: 50)
+
+    Returns:
+        A dictionary with success status and list of matching threads
+    """
+    try:
+        # Validate search_in parameter
+        valid_search_in = ["title", "body", "author", "all"]
+        if search_in not in valid_search_in:
+            return {
+                "success": False,
+                "error": f"search_in must be one of: {', '.join(valid_search_in)}",
+            }
+
+        threads = database.search_threads(query=query, search_in=search_in, limit=limit)
+        return {"success": True, "threads": threads, "count": len(threads), "query": query}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 @mcp.tool
 def create_thread(title: str, body: str, author: str) -> dict:
     """Create a new discussion thread.
@@ -182,6 +214,21 @@ def read_thread(thread_id: int) -> dict:
         A dictionary with thread info and posts list
     """
     return _read_thread_impl(db, thread_id)
+
+
+@mcp.tool
+def search_threads(query: str, search_in: str = "all", limit: int = 50) -> dict:
+    """Search threads by title, body, or author.
+
+    Args:
+        query: Search query string (case-insensitive partial match)
+        search_in: What to search in - "title", "body", "author", or "all" (default: "all")
+        limit: Maximum number of threads to return (default: 50)
+
+    Returns:
+        A dictionary with success status and list of matching threads
+    """
+    return _search_threads_impl(db, query, search_in, limit)
 
 
 def main():
