@@ -392,6 +392,44 @@ class TestReadThread:
         quoted_post = result["posts"][1]
         assert quoted_post["id"] == quoted_post_id
         assert quoted_post["quote_post_id"] == first_post_id
+        # Verify that the quoted post's body is included inline
+        assert "quoted_post_body" in quoted_post
+        assert quoted_post["quoted_post_body"] == "First reply"
+
+        # Verify that the first post (which doesn't quote anything) doesn't have quoted_post_body
+        first_post = result["posts"][0]
+        assert first_post["id"] == first_post_id
+        assert first_post["quote_post_id"] is None
+        assert "quoted_post_body" not in first_post
+
+    def test_read_thread_quoted_post_body_included(self, temp_db):
+        """Test that quoted post body is included inline in the response."""
+        thread_id = temp_db.create_thread("Test Thread", "Initial body", "author1")
+
+        # Create first post
+        first_post_body = "This is the original post content"
+        first_post_id = temp_db.create_post(thread_id, first_post_body, "author2")
+
+        # Create a reply quoting the first post
+        reply_body = "I'm replying to the first post"
+        quoted_post_id = temp_db.create_post(
+            thread_id, reply_body, "author3", quote_post_id=first_post_id
+        )
+
+        result = _read_thread_impl(temp_db, thread_id)
+
+        assert result["success"] is True
+        assert result["post_count"] == 2
+
+        # Find the post that quotes another post
+        quoted_post = next(p for p in result["posts"] if p["quote_post_id"] is not None)
+
+        # Verify quoted_post_body is present and contains the correct content
+        assert quoted_post["id"] == quoted_post_id
+        assert "quoted_post_body" in quoted_post
+        assert quoted_post["quoted_post_body"] == first_post_body
+        assert quoted_post["body"] == reply_body
+        assert quoted_post["quote_post_id"] == first_post_id
 
     def test_read_thread_nonexistent(self, temp_db):
         """Test reading non-existent thread."""

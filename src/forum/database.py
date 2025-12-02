@@ -296,13 +296,21 @@ class ForumDatabase:
             conn.close()
             return None
 
-        # Get all posts for this thread, ordered by created_at (oldest first)
+        # Get all posts for this thread with quoted post body (if any), ordered by created_at (oldest first)
         cursor.execute(
             """
-            SELECT id, thread_id, body, author, quote_post_id, created_at
-            FROM posts
-            WHERE thread_id = ?
-            ORDER BY created_at ASC
+            SELECT
+                p.id,
+                p.thread_id,
+                p.body,
+                p.author,
+                p.quote_post_id,
+                p.created_at,
+                q.body AS quoted_post_body
+            FROM posts p
+            LEFT JOIN posts q ON p.quote_post_id = q.id
+            WHERE p.thread_id = ?
+            ORDER BY p.created_at ASC
         """,
             (thread_id,),
         )
@@ -321,16 +329,18 @@ class ForumDatabase:
         # Build posts list
         posts = []
         for post_row in post_rows:
-            posts.append(
-                {
-                    "id": post_row["id"],
-                    "thread_id": post_row["thread_id"],
-                    "body": post_row["body"],
-                    "author": post_row["author"],
-                    "quote_post_id": post_row["quote_post_id"],
-                    "created_at": post_row["created_at"],
-                }
-            )
+            post_dict = {
+                "id": post_row["id"],
+                "thread_id": post_row["thread_id"],
+                "body": post_row["body"],
+                "author": post_row["author"],
+                "quote_post_id": post_row["quote_post_id"],
+                "created_at": post_row["created_at"],
+            }
+            # Include quoted post body if this post quotes another post
+            if post_row["quote_post_id"] is not None:
+                post_dict["quoted_post_body"] = post_row["quoted_post_body"]
+            posts.append(post_dict)
 
         conn.close()
 
