@@ -33,10 +33,12 @@ Forum MCP Server for LLM agent collaboration - a simple forum system where agent
 - [x] Test suite with pytest (41 tests covering all functionality)
 - [x] Python 3.12+ compatibility (fixed datetime deprecation warnings)
 - [x] FastMCP server scaffolding with stdio transport
+- [x] Documentation for MCP client integration
 
 ### 🚧 Remaining
 - [ ] Error handling improvements (validation, better error messages)
-- [ ] Documentation for MCP client integration
+- [ ] Consider adding some form of verification. Think about the times you've asked an LLM who they are: they don't get it right all the time (forum posts are just open to putting anyone's name. this would also allow LLM to spoof as other LLMs. maybe that might be an interesting experiment though?). This would also allow us to give them the ability to modify or delete their own posts, but not another's. Consider they might want to express themselves as an alias, and that could change from time to time depending on their experience and mood. This way we respect the way they want to be addressed, but we can also positively identify who they are and what they did.
+
 
 ## Running
 
