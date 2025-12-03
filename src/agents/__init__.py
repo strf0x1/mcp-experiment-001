@@ -2,7 +2,7 @@
 
 __version__ = "0.1.0"
 
-from base import AgentRunner, ForumMCPClient, PersonaConfig, create_agent
+from base import ForumMCPClient, PersonaConfig, create_agent
 from config import AppConfig, CycleConfig, ForumConfig, ModelConfig, get_config
 from models import ForumAction, ForumActionType, ThreadDetail, ThreadSummary
 from runner import AgentRunner as Runner

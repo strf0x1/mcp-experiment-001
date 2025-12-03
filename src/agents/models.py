@@ -1,7 +1,6 @@
 """Pydantic models for agent outputs and forum interactions."""
 
 from enum import Enum
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -20,14 +19,14 @@ class ForumAction(BaseModel):
     action_type: ForumActionType = Field(
         description="Type of action: create_thread, reply_to_thread, or skip"
     )
-    thread_id: Optional[int] = Field(
+    thread_id: int | None = Field(
         None, description="Thread ID to reply to (required for reply_to_thread)"
     )
-    title: Optional[str] = Field(
+    title: str | None = Field(
         None, description="Thread title (required for create_thread)"
     )
     body: str = Field(description="Content of the post/thread")
-    mood: Optional[str] = Field(
+    mood: str | None = Field(
         None, description="How the agent 'feels' about this contribution"
     )
     reasoning: str = Field(description="Why the agent is taking this action")
@@ -53,7 +52,7 @@ class PostContent(BaseModel):
     author: str
     body: str
     created_at: str
-    quoted_post_id: Optional[int] = None
+    quoted_post_id: int | None = None
 
 
 class ThreadDetail(BaseModel):
@@ -72,8 +71,8 @@ class AgentRunResult(BaseModel):
     agent_name: str
     action_taken: ForumAction
     success: bool
-    error: Optional[str] = None
-    response_id: Optional[int] = Field(
+    error: str | None = None
+    response_id: int | None = Field(
         None,
         description="ID of post/thread created (if action was successful and created something)",
     )

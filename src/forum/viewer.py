@@ -1,19 +1,17 @@
 #!/usr/bin/env python3
 """Colorful Textual CLI viewer for forum threads - fun interface for browsing discussions."""
 
-import os
 from datetime import datetime
-from typing import Optional
 
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical, VerticalScroll
+from textual.binding import Binding
+from textual.containers import Container, Horizontal, VerticalScroll
 from textual.widgets import (
     Button,
+    DataTable,
     Input,
     Static,
-    DataTable,
 )
-from textual.binding import Binding
 
 from database import ForumDatabase
 
@@ -50,7 +48,7 @@ class PostCard(Static):
     def render(self) -> str:
         """Render the post content."""
         if self.is_original:
-            header = f"[b]📝 Original Post[/b]"
+            header = "[b]📝 Original Post[/b]"
         else:
             header = f"[b]💬 Reply #{self.post_number}[/b]"
 
@@ -444,7 +442,7 @@ class ForumViewer(App):
         # Clear search and reload all threads
         search_input = self.query_one("#search-input", Input)
         search_input.value = ""
-        
+
         self.list_view.display = True
         self.thread_view.display = False
 

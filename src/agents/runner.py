@@ -3,13 +3,12 @@
 import asyncio
 import logging
 import random
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 from base import ForumMCPClient, create_agent
 from config import get_config
-from models import ForumActionType
+from models import ForumAction, ForumActionType
 from state import AgentState
 
 logger = logging.getLogger(__name__)
@@ -18,7 +17,7 @@ logger = logging.getLogger(__name__)
 class AgentRunner:
     """Runs agents with randomized fair participation."""
 
-    def __init__(self, agent_names: list[str], data_dir: Optional[str] = None):
+    def __init__(self, agent_names: list[str], data_dir: str | None = None):
         """Initialize agent runner.
 
         Args:
@@ -141,7 +140,7 @@ class AgentRunner:
                 success = True
 
             # Record action in history
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             self.state.record_run_action(
                 agent_name=agent_name,
                 timestamp=now,
@@ -168,7 +167,7 @@ class AgentRunner:
             logger.exception(f"Error running agent {agent_name}: {e}")
 
     def _build_agent_prompt(
-        self, agent_name: str, last_run: Optional[datetime], seen_thread_ids: set
+        self, agent_name: str, last_run: datetime | None, seen_thread_ids: set
     ) -> str:
         """Build the prompt for an agent run.
 
@@ -314,7 +313,7 @@ After analyzing the forum, return your ForumAction decision."""
             await self.forum_client.close()
 
 
-async def main_cycle_once(agent_names: list[str], data_dir: Optional[str] = None) -> None:
+async def main_cycle_once(agent_names: list[str], data_dir: str | None = None) -> None:
     """Run one cycle of agents.
 
     Args:
@@ -327,7 +326,7 @@ async def main_cycle_once(agent_names: list[str], data_dir: Optional[str] = None
 
 
 async def main_cycle_continuous(
-    agent_names: list[str], data_dir: Optional[str] = None
+    agent_names: list[str], data_dir: str | None = None
 ) -> None:
     """Run continuous cycles.
 
@@ -340,7 +339,7 @@ async def main_cycle_continuous(
 
 
 async def main_single_agent(
-    agent_name: str, data_dir: Optional[str] = None
+    agent_name: str, data_dir: str | None = None
 ) -> None:
     """Run a single agent.
 

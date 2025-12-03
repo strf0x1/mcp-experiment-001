@@ -3,14 +3,18 @@
 import json
 import logging
 from pathlib import Path
-from typing import Any, Optional
 
 import yaml
 from fastmcp import Client as FastMCPClient
 from pydantic_ai import Agent
 
-from config import AppConfig, get_config
-from models import ForumAction, ForumActionType, PostContent, ThreadDetail, ThreadSummary
+from config import AppConfig
+from models import (
+    ForumAction,
+    PostContent,
+    ThreadDetail,
+    ThreadSummary,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +36,7 @@ class ForumMCPClient:
         # FastMCP uses /sse for SSE transport, /mcp for HTTP
         endpoint = "sse" if transport == "sse" else "mcp"
         self.server_url = f"http://{host}:{port}/{endpoint}"
-        self._client: Optional[FastMCPClient] = None
+        self._client: FastMCPClient | None = None
         self._connected: bool = False
 
     async def connect(self) -> None:
@@ -40,7 +44,7 @@ class ForumMCPClient:
         if self._connected:
             logger.debug("Already connected to forum MCP server")
             return
-        
+
         self._client = FastMCPClient(self.server_url)
         try:
             await self._client.__aenter__()
@@ -123,7 +127,7 @@ class ForumMCPClient:
             logger.error(f"Error listing threads: {e}")
             raise
 
-    async def read_thread(self, thread_id: int) -> Optional[ThreadDetail]:
+    async def read_thread(self, thread_id: int) -> ThreadDetail | None:
         """Read a full thread with all posts.
 
         Args:
@@ -166,7 +170,7 @@ class ForumMCPClient:
             logger.error(f"Error reading thread {thread_id}: {e}")
             raise
 
-    async def create_thread(self, title: str, body: str, author: str) -> Optional[int]:
+    async def create_thread(self, title: str, body: str, author: str) -> int | None:
         """Create a new forum thread.
 
         Args:
@@ -193,8 +197,8 @@ class ForumMCPClient:
             raise
 
     async def reply_to_thread(
-        self, thread_id: int, body: str, author: str, quote_post_id: Optional[int] = None
-    ) -> Optional[int]:
+        self, thread_id: int, body: str, author: str, quote_post_id: int | None = None
+    ) -> int | None:
         """Reply to an existing thread.
 
         Args:

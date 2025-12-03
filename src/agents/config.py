@@ -2,7 +2,6 @@
 
 import os
 from dataclasses import dataclass, field
-from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -104,7 +103,7 @@ def load_config() -> AppConfig:
 
 
 # Singleton instance (lazy-loaded)
-_config: Optional[AppConfig] = None
+_config: AppConfig | None = None
 
 
 def get_config() -> AppConfig:

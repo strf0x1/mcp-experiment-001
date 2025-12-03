@@ -1,9 +1,8 @@
 """SQLite-backed state persistence for tracking agent activity."""
 
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional, Set
 
 
 class AgentState:
@@ -69,7 +68,7 @@ class AgentState:
 
             conn.commit()
 
-    def get_last_run(self, agent_name: str) -> Optional[datetime]:
+    def get_last_run(self, agent_name: str) -> datetime | None:
         """Get the last run timestamp for an agent.
 
         Args:
@@ -97,7 +96,7 @@ class AgentState:
             timestamp: Timestamp of this run
         """
         ts_str = timestamp.isoformat()
-        now_str = datetime.now(timezone.utc).isoformat()
+        now_str = datetime.now(UTC).isoformat()
 
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(
@@ -118,7 +117,7 @@ class AgentState:
 
             conn.commit()
 
-    def get_seen_thread_ids(self, agent_name: str) -> Set[int]:
+    def get_seen_thread_ids(self, agent_name: str) -> set[int]:
         """Get all thread IDs seen by an agent.
 
         Args:
@@ -143,7 +142,7 @@ class AgentState:
             agent_name: Name of the agent
             thread_id: ID of the thread
         """
-        now_str = datetime.now(timezone.utc).isoformat()
+        now_str = datetime.now(UTC).isoformat()
 
         with sqlite3.connect(self.db_path) as conn:
             try:
@@ -173,10 +172,10 @@ class AgentState:
         agent_name: str,
         timestamp: datetime,
         action_type: str,
-        thread_id: Optional[int] = None,
-        post_id: Optional[int] = None,
+        thread_id: int | None = None,
+        post_id: int | None = None,
         success: bool = True,
-        error_message: Optional[str] = None,
+        error_message: str | None = None,
     ) -> None:
         """Record an action taken during a run.
 
@@ -194,7 +193,7 @@ class AgentState:
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """
-                INSERT INTO run_history 
+                INSERT INTO run_history
                 (agent_name, run_timestamp, action_type, thread_id, post_id, success, error_message)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
