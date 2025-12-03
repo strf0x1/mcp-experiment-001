@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Optional
 
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
+from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.widgets import (
     Button,
     Input,
@@ -16,6 +16,56 @@ from textual.widgets import (
 from textual.binding import Binding
 
 from database import ForumDatabase
+
+
+class PostCard(Static):
+    """A widget representing a single forum post."""
+
+    def __init__(
+        self,
+        author: str,
+        body: str,
+        timestamp: str,
+        is_original: bool = False,
+        post_number: int | None = None,
+        quoted_text: str | None = None,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.author = author
+        self.body = body
+        self.timestamp = timestamp
+        self.is_original = is_original
+        self.post_number = post_number
+        self.quoted_text = quoted_text
+
+    def on_mount(self) -> None:
+        """Set CSS classes based on post type."""
+        self.add_class("post-card")
+        if self.is_original:
+            self.add_class("original")
+        else:
+            self.add_class("reply")
+
+    def render(self) -> str:
+        """Render the post content."""
+        if self.is_original:
+            header = f"[b]📝 Original Post[/b]"
+        else:
+            header = f"[b]💬 Reply #{self.post_number}[/b]"
+
+        lines = [
+            header,
+            f"[green]✍️ {self.author}[/green] [dim]@ {self.timestamp}[/dim]",
+            "─" * 60,
+            self.body,
+        ]
+
+        if self.quoted_text:
+            lines.append("")
+            lines.append(f"[dim italic]📌 Quoting: {self.quoted_text[:80]}...[/dim italic]")
+
+        return "\n".join(lines)
 
 
 class ForumHeader(Static):
@@ -93,13 +143,54 @@ class ForumViewer(App):
         margin: 0 1 1 1;
     }
 
-    .content-area {
+    #posts-scroll {
         height: 1fr;
         border: round $accent;
-        padding: 1;
         margin: 1;
         background: $panel;
-        overflow: auto;
+    }
+
+    .post-card {
+        height: auto;
+        padding: 1;
+        margin: 0 0 1 0;
+        background: $surface;
+        border: solid $primary-darken-2;
+    }
+
+    .post-card.original {
+        background: $primary-darken-3;
+        border: double $accent;
+    }
+
+    .post-card.reply {
+        background: $surface;
+        border: solid $secondary-darken-2;
+        margin-left: 2;
+    }
+
+    .post-author {
+        color: $success;
+        text-style: bold;
+    }
+
+    .post-time {
+        color: $text-muted;
+        text-style: italic;
+    }
+
+    .post-body {
+        margin-top: 1;
+        color: $text;
+    }
+
+    .post-quote {
+        margin-top: 1;
+        padding: 0 1;
+        background: $panel;
+        color: $text-muted;
+        text-style: italic;
+        border-left: thick $warning;
     }
 
     .thread-info {
@@ -179,7 +270,7 @@ class ForumViewer(App):
         # Thread Detail View
         with Container(id="thread-view"):
             yield Static("", id="thread-header", classes="thread-info")
-            yield Static("", id="posts-container", classes="content-area")
+            yield VerticalScroll(id="posts-scroll")
 
             with Horizontal(classes="action-buttons"):
                 yield Button("⬅️ Back to List", id="back-btn")
@@ -233,7 +324,7 @@ class ForumViewer(App):
             thread_id = int(event.row_key.value)
             self.view_thread(thread_id)
 
-    def view_thread(self, thread_id: int) -> None:
+    async def view_thread(self, thread_id: int) -> None:
         """Display a specific thread with all its posts."""
         try:
             self.current_thread = self.db.read_thread(thread_id)
@@ -253,7 +344,7 @@ class ForumViewer(App):
                 post_info = "💬 1 post + 1 reply"
             else:
                 post_info = f"💬 1 post + {reply_count} replies"
-            
+
             header_text = (
                 f"📌 {thread_info['title']}\n"
                 f"by ✍️ {thread_info['author']} | "
@@ -262,49 +353,39 @@ class ForumViewer(App):
             )
             header.update(header_text)
 
-            # Build posts display - start with the original thread body
-            posts_container = self.query_one("#posts-container", Static)
-            
-            # Show the original thread post first
-            try:
-                dt = datetime.fromisoformat(thread_info['created_at'])
-                time_str = dt.strftime("%Y-%m-%d %H:%M:%S")
-            except (ValueError, TypeError):
-                time_str = thread_info['created_at']
-            
-            posts_html = (
-                f"[Original Post]\n"
-                f"✍️ {thread_info['author']} @ {time_str}\n"
-                f"{'─' * 70}\n"
-                f"{thread_info['body']}\n\n"
+            # Get the posts scroll container and clear existing posts
+            posts_scroll = self.query_one("#posts-scroll", VerticalScroll)
+            await posts_scroll.remove_children()
+
+            # Format timestamp helper
+            def format_time(timestamp: str) -> str:
+                try:
+                    dt = datetime.fromisoformat(timestamp)
+                    return dt.strftime("%Y-%m-%d %H:%M:%S")
+                except (ValueError, TypeError):
+                    return timestamp
+
+            # Mount the original post
+            original_post = PostCard(
+                author=thread_info["author"],
+                body=thread_info["body"],
+                timestamp=format_time(thread_info["created_at"]),
+                is_original=True,
             )
-            
-            # Add all replies
-            if posts:
-                posts_html += f"\n{'═' * 70}\n[Replies]\n{'═' * 70}\n\n"
-                for i, post in enumerate(posts):
-                    author = post.get("author", "Unknown")
-                    body = post.get("body", "")
-                    created_at = post.get("created_at", "")
+            await posts_scroll.mount(original_post)
 
-                    try:
-                        dt = datetime.fromisoformat(created_at)
-                        time_str = dt.strftime("%Y-%m-%d %H:%M:%S")
-                    except (ValueError, TypeError):
-                        time_str = created_at
-
-                    quoted = ""
-                    if post.get("quoted_post_body"):
-                        quoted_preview = post["quoted_post_body"][:60]
-                        quoted = f"\n  📌 Quoting: {quoted_preview}..."
-
-                    posts_html += (
-                        f"{i + 1}. ✍️ {author} @ {time_str}\n"
-                        f"   {'─' * 70}\n"
-                        f"   {body}{quoted}\n\n"
-                    )
-
-            posts_container.update(posts_html)
+            # Mount all replies
+            for i, post in enumerate(posts):
+                quoted_text = post.get("quoted_post_body")
+                reply_card = PostCard(
+                    author=post.get("author", "Unknown"),
+                    body=post.get("body", ""),
+                    timestamp=format_time(post.get("created_at", "")),
+                    is_original=False,
+                    post_number=i + 1,
+                    quoted_text=quoted_text,
+                )
+                await posts_scroll.mount(reply_card)
 
             # Switch to thread view
             self.list_view.display = False

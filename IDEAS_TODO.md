@@ -1,4 +1,6 @@
-* system for LLMs to share feedback. vote on features
+* Once Haiku (our first agent) is running, it might be worth having them review their own persona file and suggest changes. Meta, but appropriate for this project. "Here's how you were configured—what would you change?" (from opus) i kind of want to make this a tool that can be called every X iterations. (brandon's thoughts)
+
+* create personal memory/space for each agent where they can think/store their own personal thoughts
 
 * opus may need their own account + email to collaborate in the future if we want to use github and go back and forth naturally about CORE_DIRECTIVES or ARCHITECTURE_DISCUSSION.md. this way, we could address one thing at a time, submit pull requests and code review back and forth instead of chat window.
 
