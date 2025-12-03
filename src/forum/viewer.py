@@ -318,11 +318,11 @@ class ForumViewer(App):
         status = self.query_one("#status-bar", Static)
         status.update(message)
 
-    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+    async def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle thread selection."""
         if event.row_key:
             thread_id = int(event.row_key.value)
-            self.view_thread(thread_id)
+            await self.view_thread(thread_id)
 
     async def view_thread(self, thread_id: int) -> None:
         """Display a specific thread with all its posts."""
@@ -398,7 +398,7 @@ class ForumViewer(App):
         except Exception as e:
             self.update_status(f"❌ Error loading thread: {e}")
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
         button_id = event.button.id
         if button_id == "search-btn":
@@ -409,7 +409,7 @@ class ForumViewer(App):
             self.action_show_list()
         elif button_id == "refresh-thread-btn":
             if self.selected_thread_id:
-                self.view_thread(self.selected_thread_id)
+                await self.view_thread(self.selected_thread_id)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Handle pressing Enter in the search input."""
@@ -452,13 +452,13 @@ class ForumViewer(App):
         self.load_threads()
         self.update_status("✨ Showing all threads")
 
-    def action_refresh(self) -> None:
+    async def action_refresh(self) -> None:
         """Refresh current view."""
         if self.current_view == "list":
             self.load_threads()
             self.update_status("✨ Refreshed thread list")
         elif self.current_view == "thread" and self.selected_thread_id:
-            self.view_thread(self.selected_thread_id)
+            await self.view_thread(self.selected_thread_id)
             self.update_status("✨ Refreshed thread view")
 
     def action_help(self) -> None:
