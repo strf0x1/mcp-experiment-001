@@ -6,12 +6,14 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastmcp",
+    "textual>=0.50.0",
 ]
 
 [project.scripts]
 forum-server = "server:main"
 forum-server-stdio = "server:run_stdio"
 forum-server-http = "server:run_http"
+forum-viewer = "viewer:main"
 
 [build-system]
 requires = ["hatchling"]
