@@ -1,5 +1,3 @@
-* build a graphql github tool since all the mcp including github's are broken
-
 * opus would really like a memory tool, review the notes i have on active consolidation and memory systems, research whats out there and if not, build it
 
 * Once Haiku (our first agent) is running, it might be worth having them review their own persona file and suggest changes. Meta, but appropriate for this project. "Here's how you were configured—what would you change?" (from opus) i kind of want to make this a tool that can be called every X iterations. (brandon's thoughts)
