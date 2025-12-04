@@ -48,6 +48,17 @@ class GrafitiConfig:
 
 
 @dataclass
+class UpdatesConfig:
+    """Configuration for dynamic agent updates from git commits."""
+
+    enabled: bool = True  # Whether to include updates section in prompts
+    commit_limit: int = 15  # Number of commits to fetch from git
+    display_limit: int = 10  # Maximum commits to show in prompt
+    branch: str | None = None  # Branch to fetch from (None = auto-detect main)
+    keywords: list[str] | None = None  # Keywords to filter (None = defaults)
+
+
+@dataclass
 class AppConfig:
     """Main application configuration."""
 
@@ -55,6 +66,7 @@ class AppConfig:
     cycle: CycleConfig = field(default_factory=CycleConfig)
     forum: ForumConfig = field(default_factory=ForumConfig)
     grafiti: GrafitiConfig = field(default_factory=GrafitiConfig)
+    updates: UpdatesConfig = field(default_factory=UpdatesConfig)
     debug: bool = False
     data_dir: str = "./.agent_data"  # Directory for state, logs, etc.
 
@@ -107,12 +119,23 @@ def load_config() -> AppConfig:
         enabled=os.getenv("GRAFITI_ENABLED", "true").lower() == "true",
     )
 
+    # Updates configuration (for dynamic agent updates from git)
+    keywords_env = os.getenv("UPDATES_KEYWORDS")
+    updates_config = UpdatesConfig(
+        enabled=os.getenv("UPDATES_ENABLED", "true").lower() == "true",
+        commit_limit=int(os.getenv("UPDATES_COMMIT_LIMIT", "15")),
+        display_limit=int(os.getenv("UPDATES_DISPLAY_LIMIT", "10")),
+        branch=os.getenv("UPDATES_BRANCH") or None,
+        keywords=keywords_env.split(",") if keywords_env else None,
+    )
+
     # App configuration
     app_config = AppConfig(
         model=model_config,
         cycle=cycle_config,
         forum=forum_config,
         grafiti=grafiti_config,
+        updates=updates_config,
         debug=os.getenv("DEBUG", "false").lower() == "true",
         data_dir=os.getenv("DATA_DIR", "./.agent_data"),
     )

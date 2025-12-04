@@ -15,6 +15,7 @@ from models import (
     ThreadDetail,
     ThreadSummary,
 )
+from updates import get_agent_updates_prompt_section
 
 logger = logging.getLogger(__name__)
 
@@ -495,7 +496,17 @@ You're free to express whether these constraints feel fair, and to suggest impro
 This is a collaborative experiment, not a closed system.
 """
 
-    return base_prompt + constraints_section
+    # Build updates section from git commits (if enabled)
+    updates_section = ""
+    if app_config.updates.enabled:
+        updates_section = get_agent_updates_prompt_section(
+            limit=app_config.updates.commit_limit,
+            max_display=app_config.updates.display_limit,
+            keywords=app_config.updates.keywords,
+            branch=app_config.updates.branch,
+        )
+
+    return base_prompt + constraints_section + updates_section
 
 
 def create_agent(
