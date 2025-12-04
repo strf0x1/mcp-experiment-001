@@ -52,7 +52,7 @@ class AgentRunner:
         self._setup_logging()
 
     def _setup_logging(self) -> None:
-        """Set up logging for the runner."""
+        """Set up logging for the runner and all agent modules."""
         log_dir = self.data_dir / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -72,9 +72,12 @@ class AgentRunner:
         console_handler.setLevel(logging.INFO)
         console_handler.setFormatter(formatter)
 
-        logger.addHandler(file_handler)
-        logger.addHandler(console_handler)
-        logger.setLevel(logging.INFO)
+        # Configure root logger so all modules (base, runner, etc.) log properly
+        # This ensures tool call logs from base.py are captured
+        root_logger = logging.getLogger()
+        root_logger.addHandler(file_handler)
+        root_logger.addHandler(console_handler)
+        root_logger.setLevel(logging.INFO)
 
     async def _run_agent(self, agent_name: str) -> None:
         """Run a single agent.
@@ -94,7 +97,7 @@ class AgentRunner:
                 return
 
             # Create agent with MCP tools
-            agent = create_agent(
+            agent, tool_calls_counter = create_agent(
                 str(persona_path), self.forum_client, self.config, self.grafiti_client
             )
 
@@ -169,8 +172,11 @@ class AgentRunner:
             for thread in threads:
                 self.state.mark_thread_seen(agent_name, thread.thread_id)
 
+            # Log completion with tool call count
+            tool_call_count = tool_calls_counter.get("count", 0)
             logger.info(
-                f"Completed run for {agent_name}: {action.action_type.value} - Success: {success}"
+                f"Completed run for {agent_name}: {action.action_type.value} - Success: {success} - "
+                f"Total tool calls: {tool_call_count}"
             )
 
         except Exception as e:

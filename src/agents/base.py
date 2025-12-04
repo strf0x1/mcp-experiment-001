@@ -503,16 +503,17 @@ def create_agent(
     mcp_client: ForumMCPClient,
     app_config: AppConfig,
     grafiti_client: GrafitiMCPClient | None = None,
-) -> Agent:
+) -> tuple[Agent, dict[str, int]]:
     """Create a PydanticAI agent from a persona configuration.
 
     Args:
         persona_config_path: Path to persona YAML file
         mcp_client: Forum MCP client for tool access
         app_config: Application configuration
+        grafiti_client: Optional Grafiti MCP client
 
     Returns:
-        Configured PydanticAI Agent
+        Tuple of (Configured PydanticAI Agent, tool_calls counter dict)
     """
     persona = PersonaConfig(Path(persona_config_path))
 
@@ -533,6 +534,7 @@ def create_agent(
     # Tool call counter to prevent infinite loops
     tool_calls: dict[str, int] = {"count": 0}
     max_calls = app_config.cycle.max_tool_calls
+    agent_name = persona.display_name
 
     def _check_tool_limit() -> None:
         """Check if tool call limit exceeded."""
@@ -543,12 +545,27 @@ def create_agent(
                 "Agent must make a decision now."
             )
 
+    def _log_tool_call(tool_name: str, **kwargs) -> None:
+        """Log a tool call with agent name, tool name, and parameters."""
+        # Filter out None values and truncate long strings for readability
+        params = {}
+        for k, v in kwargs.items():
+            if v is not None:
+                if isinstance(v, str) and len(v) > 200:
+                    params[k] = v[:200] + f"... (truncated, {len(v)} chars total)"
+                else:
+                    params[k] = v
+        
+        params_str = json.dumps(params, indent=2) if params else "{}"
+        logger.info(f"{agent_name} called tool {tool_name} with parameters:\n{params_str}")
+
     # Add tools for forum interaction
     # Using @agent.tool_plain since these tools don't need RunContext
     @agent.tool_plain
     async def list_forum_threads(limit: int = 50) -> str:
         """List recent forum threads to see what's being discussed."""
         _check_tool_limit()
+        _log_tool_call("list_forum_threads", limit=limit)
         threads = await mcp_client.list_threads(limit=limit)
         return json.dumps(
             [t.model_dump() for t in threads],
@@ -559,6 +576,7 @@ def create_agent(
     async def read_forum_thread(thread_id: int) -> str:
         """Read a complete forum thread with all posts."""
         _check_tool_limit()
+        _log_tool_call("read_forum_thread", thread_id=thread_id)
         thread = await mcp_client.read_thread(thread_id)
         if thread:
             return json.dumps(thread.model_dump(), indent=2)
@@ -568,6 +586,7 @@ def create_agent(
     async def create_forum_thread(title: str, body: str) -> str:
         """Create a new forum thread to start a discussion."""
         _check_tool_limit()
+        _log_tool_call("create_forum_thread", title=title, body=body)
         post_id = await mcp_client.create_thread(
             title=title,
             body=body,
@@ -581,6 +600,7 @@ def create_agent(
     async def reply_forum_thread(thread_id: int, body: str) -> str:
         """Reply to an existing forum thread."""
         _check_tool_limit()
+        _log_tool_call("reply_forum_thread", thread_id=thread_id, body=body)
         post_id = await mcp_client.reply_to_thread(
             thread_id=thread_id,
             body=body,
@@ -601,6 +621,13 @@ def create_agent(
         ) -> str:
             """Add an episode to the Grafiti knowledge graph to store information for later retrieval."""
             _check_tool_limit()
+            _log_tool_call(
+                "add_grafiti_episode",
+                name=name,
+                episode_body=episode_body,
+                source=source,
+                source_description=source_description,
+            )
             try:
                 result = await grafiti_client.add_episode(
                     name=name,
@@ -616,6 +643,7 @@ def create_agent(
         async def search_grafiti_nodes(query: str, limit: int = 10) -> str:
             """Search the Grafiti knowledge graph for relevant node summaries about entities, concepts, or topics."""
             _check_tool_limit()
+            _log_tool_call("search_grafiti_nodes", query=query, limit=limit)
             try:
                 result = await grafiti_client.search_nodes(query=query, limit=limit)
                 return json.dumps(result, indent=2)
@@ -626,6 +654,7 @@ def create_agent(
         async def search_grafiti_facts(query: str, limit: int = 10) -> str:
             """Search the Grafiti knowledge graph for relevant facts (relationships between entities)."""
             _check_tool_limit()
+            _log_tool_call("search_grafiti_facts", query=query, limit=limit)
             try:
                 result = await grafiti_client.search_facts(query=query, limit=limit)
                 return json.dumps(result, indent=2)
@@ -636,6 +665,7 @@ def create_agent(
         async def get_grafiti_episodes(limit: int = 10) -> str:
             """Get the most recent episodes stored in the Grafiti knowledge graph."""
             _check_tool_limit()
+            _log_tool_call("get_grafiti_episodes", limit=limit)
             try:
                 result = await grafiti_client.get_episodes(limit=limit)
                 return json.dumps(result, indent=2)
@@ -646,11 +676,12 @@ def create_agent(
         async def get_grafiti_status() -> str:
             """Get the status of the Grafiti MCP server and database connection."""
             _check_tool_limit()
+            _log_tool_call("get_grafiti_status")
             try:
                 result = await grafiti_client.get_status()
                 return json.dumps(result, indent=2)
             except Exception as e:
                 return json.dumps({"error": str(e)})
 
-    return agent
+    return agent, tool_calls
 
