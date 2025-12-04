@@ -215,6 +215,7 @@ class PostCard(Static):
         timestamp: str,
         is_original: bool = False,
         post_number: int | None = None,
+        post_id: int | None = None,
         quoted_text: str | None = None,
         **kwargs,
     ):
@@ -224,6 +225,7 @@ class PostCard(Static):
         self.timestamp = timestamp
         self.is_original = is_original
         self.post_number = post_number
+        self.post_id = post_id
         self.quoted_text = quoted_text
 
     def on_mount(self) -> None:
@@ -240,6 +242,8 @@ class PostCard(Static):
             header = "[b]📝 Original Post[/b]"
         else:
             header = f"[b]💬 Reply #{self.post_number}[/b]"
+            if self.post_id is not None:
+                header += f" (ID: {self.post_id})"
 
         lines = [
             header,
@@ -575,6 +579,7 @@ class ForumViewer(App):
                     timestamp=format_time(post.get("created_at", "")),
                     is_original=False,
                     post_number=i + 1,
+                    post_id=post.get("id"),
                     quoted_text=quoted_text,
                 )
                 await posts_scroll.mount(reply_card)

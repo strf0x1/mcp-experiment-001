@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "fastmcp",
     "textual>=0.50.0",
+    "click>=8.0.0",
 ]
 
 [project.scripts]
@@ -14,6 +15,7 @@ forum-server = "server:main"
 forum-server-stdio = "server:run_stdio"
 forum-server-http = "server:run_http"
 forum-viewer = "viewer:main"
+forum-manage = "manage:main"
 
 [build-system]
 requires = ["hatchling"]

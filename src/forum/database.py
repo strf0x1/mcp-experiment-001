@@ -346,6 +346,62 @@ class ForumDatabase:
 
         return {"thread": thread, "posts": posts}
 
+    def delete_post(self, post_id: int) -> bool:
+        """Delete a post by ID.
+
+        Args:
+            post_id: The ID of the post to delete
+
+        Returns:
+            True if post was deleted, False if post doesn't exist
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        # Enable foreign key constraints
+        cursor.execute("PRAGMA foreign_keys = ON")
+
+        # Check if post exists
+        cursor.execute("SELECT id FROM posts WHERE id = ?", (post_id,))
+        if cursor.fetchone() is None:
+            conn.close()
+            return False
+
+        # Delete the post
+        cursor.execute("DELETE FROM posts WHERE id = ?", (post_id,))
+        conn.commit()
+        conn.close()
+
+        return True
+
+    def delete_thread(self, thread_id: int) -> bool:
+        """Delete a thread by ID (cascades to delete all posts in the thread).
+
+        Args:
+            thread_id: The ID of the thread to delete
+
+        Returns:
+            True if thread was deleted, False if thread doesn't exist
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        # Enable foreign key constraints
+        cursor.execute("PRAGMA foreign_keys = ON")
+
+        # Check if thread exists
+        cursor.execute("SELECT id FROM threads WHERE id = ?", (thread_id,))
+        if cursor.fetchone() is None:
+            conn.close()
+            return False
+
+        # Delete the thread (cascades to delete all posts)
+        cursor.execute("DELETE FROM threads WHERE id = ?", (thread_id,))
+        conn.commit()
+        conn.close()
+
+        return True
+
     def get_connection(self):
         """Get a database connection."""
         return sqlite3.connect(self.db_path)

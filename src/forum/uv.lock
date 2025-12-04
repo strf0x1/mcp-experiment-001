@@ -369,6 +369,7 @@ name = "forum"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "click" },
     { name = "fastmcp" },
     { name = "textual" },
 ]
@@ -382,6 +383,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "click", specifier = ">=8.0.0" },
     { name = "fastmcp" },
     { name = "textual", specifier = ">=0.50.0" },
 ]
