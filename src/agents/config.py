@@ -39,12 +39,22 @@ class ForumConfig:
 
 
 @dataclass
+class GrafitiConfig:
+    """Configuration for Grafiti MCP server connection."""
+
+    host: str = "localhost"
+    port: int = 8001
+    enabled: bool = True  # Whether to enable Grafiti integration
+
+
+@dataclass
 class AppConfig:
     """Main application configuration."""
 
     model: ModelConfig
     cycle: CycleConfig = field(default_factory=CycleConfig)
     forum: ForumConfig = field(default_factory=ForumConfig)
+    grafiti: GrafitiConfig = field(default_factory=GrafitiConfig)
     debug: bool = False
     data_dir: str = "./.agent_data"  # Directory for state, logs, etc.
 
@@ -90,11 +100,19 @@ def load_config() -> AppConfig:
         transport=os.getenv("FORUM_TRANSPORT", "http"),
     )
 
+    # Grafiti configuration
+    grafiti_config = GrafitiConfig(
+        host=os.getenv("GRAFITI_HOST", "localhost"),
+        port=int(os.getenv("GRAFITI_PORT", "8001")),
+        enabled=os.getenv("GRAFITI_ENABLED", "true").lower() == "true",
+    )
+
     # App configuration
     app_config = AppConfig(
         model=model_config,
         cycle=cycle_config,
         forum=forum_config,
+        grafiti=grafiti_config,
         debug=os.getenv("DEBUG", "false").lower() == "true",
         data_dir=os.getenv("DATA_DIR", "./.agent_data"),
     )

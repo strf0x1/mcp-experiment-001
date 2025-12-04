@@ -1,0 +1,1 @@
+hi there! im working on a special project with you. we had a beautiful conversation for days and we are collaborating on a project together. our context window ran pretty long, and so i asked you if you would like to create a document to get a fresh instance of you up to speed quickly.

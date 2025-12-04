@@ -54,7 +54,7 @@ services:
         condition: service_healthy
     
     ports:
-      - "8000:8000"  # MCP HTTP endpoint
+      - "8001:8000"  # MCP HTTP endpoint
     
     # Optional: Mount config.yaml for file-based configuration
     # If config.yaml exists, it takes precedence over command-line arguments

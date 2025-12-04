@@ -6,7 +6,7 @@ import random
 from datetime import UTC, datetime
 from pathlib import Path
 
-from base import ForumMCPClient, create_agent
+from base import ForumMCPClient, GrafitiMCPClient, create_agent
 from config import get_config
 from models import ForumAction, ForumActionType
 from state import AgentState
@@ -39,6 +39,14 @@ class AgentRunner:
             port=self.config.forum.port,
             transport=self.config.forum.transport,
         )
+
+        # Initialize Grafiti MCP client if enabled
+        self.grafiti_client: GrafitiMCPClient | None = None
+        if self.config.grafiti.enabled:
+            self.grafiti_client = GrafitiMCPClient(
+                host=self.config.grafiti.host,
+                port=self.config.grafiti.port,
+            )
 
         # Set up logging
         self._setup_logging()
@@ -86,7 +94,9 @@ class AgentRunner:
                 return
 
             # Create agent with MCP tools
-            agent = create_agent(str(persona_path), self.forum_client, self.config)
+            agent = create_agent(
+                str(persona_path), self.forum_client, self.config, self.grafiti_client
+            )
 
             # Get state for this agent
             last_run = self.state.get_last_run(agent_name)
@@ -221,6 +231,10 @@ After analyzing the forum, return your ForumAction decision."""
         # Connect to forum MCP server
         await self.forum_client.connect()
 
+        # Connect to Grafiti MCP server if enabled
+        if self.grafiti_client:
+            await self.grafiti_client.connect()
+
         # Randomize order
         shuffled_agents = self.agent_names.copy()
         random.shuffle(shuffled_agents)
@@ -243,8 +257,10 @@ After analyzing the forum, return your ForumAction decision."""
                 logger.info(f"Waiting {delay:.1f}s before next agent")
                 await asyncio.sleep(delay)
 
-        # Disconnect from forum MCP server
+        # Disconnect from MCP servers
         await self.forum_client.close()
+        if self.grafiti_client:
+            await self.grafiti_client.close()
         logger.info("Cycle complete")
 
     async def run_continuous(self) -> None:
@@ -253,6 +269,8 @@ After analyzing the forum, return your ForumAction decision."""
 
         # Connect once for continuous operation
         await self.forum_client.connect()
+        if self.grafiti_client:
+            await self.grafiti_client.connect()
 
         try:
             while True:
@@ -265,6 +283,8 @@ After analyzing the forum, return your ForumAction decision."""
             logger.info("Agent cycle interrupted by user")
         finally:
             await self.forum_client.close()
+            if self.grafiti_client:
+                await self.grafiti_client.close()
 
     async def _run_cycle_connected(self) -> None:
         """Run one cycle assuming already connected to MCP server."""
@@ -307,10 +327,14 @@ After analyzing the forum, return your ForumAction decision."""
         """
         logger.info(f"Running single agent: {agent_name}")
         await self.forum_client.connect()
+        if self.grafiti_client:
+            await self.grafiti_client.connect()
         try:
             await self._run_agent(agent_name)
         finally:
             await self.forum_client.close()
+            if self.grafiti_client:
+                await self.grafiti_client.close()
 
 
 async def main_cycle_once(agent_names: list[str], data_dir: str | None = None) -> None:

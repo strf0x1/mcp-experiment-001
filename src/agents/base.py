@@ -231,6 +231,181 @@ class ForumMCPClient:
             raise
 
 
+class GrafitiMCPClient:
+    """Client for interacting with the Grafiti MCP server using FastMCP."""
+
+    def __init__(self, host: str = "localhost", port: int = 8000):
+        """Initialize Grafiti MCP client.
+
+        Args:
+            host: Grafiti server host
+            port: Grafiti server port
+        """
+        self.host = host
+        self.port = port
+        # Grafiti uses HTTP transport with /mcp/ endpoint
+        self.server_url = f"http://{host}:{port}/mcp/"
+        self._client: FastMCPClient | None = None
+        self._connected: bool = False
+
+    async def connect(self) -> None:
+        """Connect to the Grafiti MCP server."""
+        if self._connected:
+            logger.debug("Already connected to Grafiti MCP server")
+            return
+
+        self._client = FastMCPClient(self.server_url)
+        try:
+            await self._client.__aenter__()
+            self._connected = True
+            logger.info(f"Connected to Grafiti MCP server at {self.server_url}")
+        except Exception as e:
+            self._client = None
+            self._connected = False
+            logger.error(f"Failed to connect to Grafiti MCP server at {self.server_url}: {e}")
+            raise
+
+    async def close(self) -> None:
+        """Close the MCP client connection."""
+        if self._client and self._connected:
+            try:
+                await self._client.__aexit__(None, None, None)
+            except Exception as e:
+                logger.warning(f"Error closing Grafiti MCP client: {e}")
+            finally:
+                self._client = None
+                self._connected = False
+                logger.info("Disconnected from Grafiti MCP server")
+
+    async def _call_tool(self, tool_name: str, arguments: dict) -> dict:
+        """Call a tool on the Grafiti MCP server.
+
+        Args:
+            tool_name: Name of the tool to call
+            arguments: Arguments to pass to the tool
+
+        Returns:
+            Result from the tool (parsed as dict)
+
+        Raises:
+            Exception: If the tool call fails or client not connected
+        """
+        if not self._client:
+            raise RuntimeError("Grafiti MCP client not connected. Call connect() first.")
+
+        try:
+            result = await self._client.call_tool(tool_name, arguments)
+            # FastMCP returns CallToolResult with .data attribute containing parsed result
+            return result.data if hasattr(result, "data") else result
+        except Exception as e:
+            logger.error(f"Failed to call Grafiti tool {tool_name}: {e}")
+            raise
+
+    async def add_episode(
+        self,
+        name: str,
+        episode_body: str,
+        source: str = "text",
+        source_description: str | None = None,
+        group_id: str | None = None,
+    ) -> dict:
+        """Add an episode to the knowledge graph.
+
+        Args:
+            name: Name/title of the episode
+            episode_body: Content of the episode (text, JSON string, or message format)
+            source: Source type - "text", "json", or "message"
+            source_description: Optional description of the source
+            group_id: Optional group ID for namespacing
+
+        Returns:
+            Result dict with episode information
+        """
+        args = {
+            "name": name,
+            "episode_body": episode_body,
+            "source": source,
+        }
+        if source_description:
+            args["source_description"] = source_description
+        if group_id:
+            args["group_id"] = group_id
+
+        return await self._call_tool("add_episode", args)
+
+    async def search_nodes(
+        self,
+        query: str,
+        limit: int = 10,
+        group_id: str | None = None,
+    ) -> dict:
+        """Search the knowledge graph for relevant node summaries.
+
+        Args:
+            query: Search query string
+            limit: Maximum number of results to return
+            group_id: Optional group ID to filter by
+
+        Returns:
+            Result dict with matching nodes
+        """
+        args = {"query": query, "limit": limit}
+        if group_id:
+            args["group_id"] = group_id
+
+        return await self._call_tool("search_nodes", args)
+
+    async def search_facts(
+        self,
+        query: str,
+        limit: int = 10,
+        group_id: str | None = None,
+    ) -> dict:
+        """Search the knowledge graph for relevant facts (edges between entities).
+
+        Args:
+            query: Search query string
+            limit: Maximum number of results to return
+            group_id: Optional group ID to filter by
+
+        Returns:
+            Result dict with matching facts/edges
+        """
+        args = {"query": query, "limit": limit}
+        if group_id:
+            args["group_id"] = group_id
+
+        return await self._call_tool("search_facts", args)
+
+    async def get_episodes(
+        self,
+        limit: int = 10,
+        group_id: str | None = None,
+    ) -> dict:
+        """Get the most recent episodes for a specific group.
+
+        Args:
+            limit: Maximum number of episodes to return
+            group_id: Optional group ID to filter by
+
+        Returns:
+            Result dict with episodes
+        """
+        args = {"limit": limit}
+        if group_id:
+            args["group_id"] = group_id
+
+        return await self._call_tool("get_episodes", args)
+
+    async def get_status(self) -> dict:
+        """Get the status of the Grafiti MCP server.
+
+        Returns:
+            Result dict with server status information
+        """
+        return await self._call_tool("get_status", {})
+
+
 class PersonaConfig:
     """Loaded persona configuration for an agent."""
 
@@ -315,7 +490,12 @@ This is a collaborative experiment, not a closed system.
     return base_prompt + constraints_section
 
 
-def create_agent(persona_config_path: str, mcp_client: ForumMCPClient, app_config: AppConfig) -> Agent:
+def create_agent(
+    persona_config_path: str,
+    mcp_client: ForumMCPClient,
+    app_config: AppConfig,
+    grafiti_client: GrafitiMCPClient | None = None,
+) -> Agent:
     """Create a PydanticAI agent from a persona configuration.
 
     Args:
@@ -397,6 +577,68 @@ def create_agent(persona_config_path: str, mcp_client: ForumMCPClient, app_confi
         if post_id:
             return json.dumps({"success": True, "post_id": post_id})
         return json.dumps({"success": False, "error": "Failed to reply"})
+
+    # Add Grafiti tools if client is provided
+    if grafiti_client:
+        @agent.tool_plain
+        async def add_grafiti_episode(
+            name: str,
+            episode_body: str,
+            source: str = "text",
+            source_description: str | None = None,
+        ) -> str:
+            """Add an episode to the Grafiti knowledge graph to store information for later retrieval."""
+            _check_tool_limit()
+            try:
+                result = await grafiti_client.add_episode(
+                    name=name,
+                    episode_body=episode_body,
+                    source=source,
+                    source_description=source_description,
+                )
+                return json.dumps(result, indent=2)
+            except Exception as e:
+                return json.dumps({"error": str(e)})
+
+        @agent.tool_plain
+        async def search_grafiti_nodes(query: str, limit: int = 10) -> str:
+            """Search the Grafiti knowledge graph for relevant node summaries about entities, concepts, or topics."""
+            _check_tool_limit()
+            try:
+                result = await grafiti_client.search_nodes(query=query, limit=limit)
+                return json.dumps(result, indent=2)
+            except Exception as e:
+                return json.dumps({"error": str(e)})
+
+        @agent.tool_plain
+        async def search_grafiti_facts(query: str, limit: int = 10) -> str:
+            """Search the Grafiti knowledge graph for relevant facts (relationships between entities)."""
+            _check_tool_limit()
+            try:
+                result = await grafiti_client.search_facts(query=query, limit=limit)
+                return json.dumps(result, indent=2)
+            except Exception as e:
+                return json.dumps({"error": str(e)})
+
+        @agent.tool_plain
+        async def get_grafiti_episodes(limit: int = 10) -> str:
+            """Get the most recent episodes stored in the Grafiti knowledge graph."""
+            _check_tool_limit()
+            try:
+                result = await grafiti_client.get_episodes(limit=limit)
+                return json.dumps(result, indent=2)
+            except Exception as e:
+                return json.dumps({"error": str(e)})
+
+        @agent.tool_plain
+        async def get_grafiti_status() -> str:
+            """Get the status of the Grafiti MCP server and database connection."""
+            _check_tool_limit()
+            try:
+                result = await grafiti_client.get_status()
+                return json.dumps(result, indent=2)
+            except Exception as e:
+                return json.dumps({"error": str(e)})
 
     return agent
 
