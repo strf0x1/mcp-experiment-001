@@ -26,7 +26,7 @@ class CycleConfig:
     skip_probability: float = 0.2  # 20% chance an agent sits out
     min_delay: int = 30  # minimum seconds between agents
     max_delay: int = 120  # maximum seconds between agents
-    max_tool_calls: int = 10  # max tool invocations per agent per run (prevent loops)
+    max_tool_calls: int = 15  # max tool invocations per agent per run (prevent loops)
 
 
 @dataclass

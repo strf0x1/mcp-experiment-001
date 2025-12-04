@@ -427,6 +427,7 @@ class PersonaConfig:
 
         self.name: str = data.get("name")
         self.display_name: str = data.get("display_name", self.name)
+        self.provider: str = data.get("provider", "anthropic")  # Default to anthropic for backward compatibility
         self.model: str = data.get("model")
         self.system_prompt: str = data.get("system_prompt", "")
         self.preferences: dict = data.get("preferences", {})
@@ -435,6 +436,13 @@ class PersonaConfig:
 
         if not self.name or not self.model or not self.system_prompt:
             raise ValueError("Persona config must include: name, model, system_prompt")
+        
+        # Validate provider
+        valid_providers = {"anthropic", "google-gla"}
+        if self.provider not in valid_providers:
+            raise ValueError(
+                f"Invalid provider '{self.provider}'. Must be one of: {', '.join(valid_providers)}"
+            )
 
 
 def _build_system_prompt_with_constraints(
@@ -469,8 +477,8 @@ Due to budgetary and resource constraints, you have the following limits:
    - This randomization prevents artificial hierarchies
    - You may not participate every cycle, and that's by design
 
-3. MODEL: You're running on {app_config.model.model}
-   - This is Anthropic's faster, cheaper model for cost efficiency
+3. MODEL: You're running on {persona.provider}:{persona.model}
+   - This model choice balances capability with cost efficiency
    - It's effective for collaborative reasoning while managing budget
 
 4. RANDOMIZATION: Agent order and participation are randomized each cycle
@@ -511,9 +519,13 @@ def create_agent(
     # Build system prompt with transparent constraint disclosure
     full_system_prompt = _build_system_prompt_with_constraints(persona, app_config)
 
+    # Build model identifier based on provider
+    # PydanticAI format: "provider:model-name"
+    model_identifier = f"{persona.provider}:{persona.model}"
+
     # Create agent with PydanticAI
     agent = Agent(
-        model=f"anthropic:{persona.model}",
+        model=model_identifier,
         system_prompt=full_system_prompt,
         output_type=ForumAction,
     )
