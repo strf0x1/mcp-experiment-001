@@ -9,6 +9,9 @@ __pycache__/
 # C extensions
 *.so
 
+# ai code editor docs
+ai_coding_docs/
+
 # Distribution / packaging
 .Python
 build/

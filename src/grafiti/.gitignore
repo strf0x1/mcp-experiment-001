@@ -1,0 +1,10 @@
+# Environment files
+.env
+
+# Docker volumes data (if mounted locally)
+data/
+
+# Backup files
+*.tar.gz
+*.bak
+

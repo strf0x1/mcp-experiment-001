@@ -1,0 +1,148 @@
+services:
+  falkordb:
+    image: falkordb/falkordb:latest
+    container_name: grafiti-falkordb
+    restart: unless-stopped
+    
+    ports:
+      - "6379:6379"  # Redis/FalkorDB protocol
+      - "3000:3000"  # FalkorDB web UI
+    
+    volumes:
+      # Persist graph data across reboots
+      - falkordb_data:/var/lib/falkordb/data
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+  
+  grafiti-mcp:
+    # Using the official pre-built image
+    # To build from source instead, uncomment the build section below
+    image: zepai/knowledge-graph-mcp:latest
+    
+    # Uncomment to build from source:
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    
+    container_name: grafiti-mcp-server
+    restart: unless-stopped
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    
+    ports:
+      - "8000:8000"  # MCP HTTP endpoint
+    
+    # Optional: Mount config.yaml for file-based configuration
+    # If config.yaml exists, it takes precedence over command-line arguments
+    # Uncomment the volumes section below if you want to use config.yaml:
+    # volumes:
+    #   - ./config.yaml:/app/config.yaml:ro
+    
+    environment:
+      # Database configuration
+      - FALKORDB_URI=redis://falkordb:6379
+      - FALKORDB_PASSWORD=${FALKORDB_PASSWORD:-}
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-default_db}
+      
+      # LLM configuration (at least one required)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      
+      # Embedder configuration
+      - VOYAGE_API_KEY=${VOYAGE_API_KEY:-}
+      
+      # Server configuration
+      - SEMAPHORE_LIMIT=${SEMAPHORE_LIMIT:-10}
+      - GRAPHITI_TELEMETRY_ENABLED=${GRAPHITI_TELEMETRY_ENABLED:-true}
+      
+      # LLM Model Configuration
+      # These are passed as command-line arguments if config.yaml is not used
+      - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - LLM_TEMPERATURE=${LLM_TEMPERATURE:-0.0}
+      
+      # Embedder Model Configuration
+      - EMBEDDER_MODEL=${EMBEDDER_MODEL:-text-embedding-3-small}
+      - EMBEDDER_PROVIDER=${EMBEDDER_PROVIDER:-openai}
+      
+      # Optional: Azure OpenAI (only set if actually using Azure)
+      # Remove these lines or leave them unset in .env if not using Azure OpenAI
+      # - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
+      # - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
+      # - AZURE_OPENAI_DEPLOYMENT=${AZURE_OPENAI_DEPLOYMENT}
+      # - AZURE_OPENAI_EMBEDDINGS_ENDPOINT=${AZURE_OPENAI_EMBEDDINGS_ENDPOINT}
+      # - AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT=${AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT}
+      # - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION}
+      # - USE_AZURE_AD=${USE_AZURE_AD:-false}
+    
+    # Health check configuration
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    
+    # Override command to pass model configuration via CLI args
+    # If config.yaml exists and is mounted, it takes precedence over these arguments
+    command: >
+      --llm-provider ${LLM_PROVIDER:-openai}
+      --model ${LLM_MODEL:-gpt-4o-mini}
+      --temperature ${LLM_TEMPERATURE:-0.0}
+      --embedder-provider ${EMBEDDER_PROVIDER:-openai}
+      --database-provider falkordb
+      --transport http
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  # Named volume for FalkorDB data persistence
+  # This ensures data survives container restarts and removals
+  falkordb_data:
+    driver: local
+
+networks:
+  default:
+    name: mcp_shared
+
