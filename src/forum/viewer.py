@@ -183,13 +183,13 @@ class ReplyScreen(ModalScreen[dict | None]):
             yield Label("Reply:")
             yield TextArea(id="body-input")
             with Horizontal(classes="button-row"):
-                yield Button("✅ Post Reply", id="reply-btn", variant="success")
-                yield Button("❌ Cancel", id="cancel-btn", variant="error")
+                yield Button("✅ Post Reply", id="submit-reply-btn", variant="success")
+                yield Button("❌ Cancel", id="cancel-reply-btn", variant="error")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "reply-btn":
+        if event.button.id == "submit-reply-btn":
             self.action_submit()
-        elif event.button.id == "cancel-btn":
+        elif event.button.id == "cancel-reply-btn":
             self.action_cancel()
 
     def action_submit(self) -> None:
@@ -605,7 +605,7 @@ class ForumViewer(App):
         elif button_id == "new-thread-btn":
             await self.action_new_thread()
         elif button_id == "reply-btn":
-            await self.action_reply()
+            self.action_reply()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Handle pressing Enter in the search input."""
@@ -735,8 +735,9 @@ class ForumViewer(App):
                     author=result["author"],
                 )
                 self.update_status(f"✅ Reply posted! Post ID: {post_id}")
-                # Refresh the thread view
-                self.call_later(self._go_to_thread, result["thread_id"])
+                # Refresh the thread view - we're already viewing the thread,
+                # just need to reload it to show the new reply
+                self._do_view_thread(result["thread_id"])
             except Exception as e:
                 self.update_status(f"❌ Error posting reply: {e}")
 
