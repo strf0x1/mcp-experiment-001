@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  github-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: github-mcp-server
+    restart: unless-stopped
+    
+    ports:
+      - "8003:8000"
+    
+    environment:
+      # GitHub authentication token (required)
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      
+      # GitHub repository owner (optional, defaults to altstaq-research)
+      - GITHUB_OWNER=${GITHUB_OWNER:-altstaq-research}
+      
+      # GitHub repository name (optional, defaults to project-management)
+      - GITHUB_REPO=${GITHUB_REPO:-project-management}
+      
+      # Optional: Override log level (DEBUG, INFO, WARNING, ERROR - must be uppercase)
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    
+    # Override CMD to include log level from environment
+    command: ["--host", "0.0.0.0", "--port", "8000", "--log-level", "INFO"]
+    
+    # Health check configuration (check simple health endpoint)
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  default:
+    name: mcp_shared
+

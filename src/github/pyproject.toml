@@ -1,0 +1,36 @@
+[project]
+name = "github-mcp-server"
+version = "0.1.0"
+description = "MCP Server for GitHub Projects V2"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "requests",
+    "python-dotenv",
+    "fastmcp",
+]
+
+[project.scripts]
+github-mcp = "github_mcp_server.server:main"
+github-mcp-stdio = "github_mcp_server.server:main_stdio"
+github-mcp-http = "github_mcp_server.server:main_http"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/github_mcp_server"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14.7",
+]
+
+[tool.ruff]
+# Set a high line length limit (max allowed is 320)
+line-length = 320
+
+[tool.ruff.lint]
+# Disable E501 (line too long) rule
+ignore = ["E501"]
