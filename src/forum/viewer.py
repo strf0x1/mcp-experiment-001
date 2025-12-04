@@ -5,15 +5,204 @@ from datetime import datetime
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Container, Horizontal, VerticalScroll
+from textual.containers import Container, Horizontal, Vertical, VerticalScroll
+from textual.screen import ModalScreen
 from textual.widgets import (
     Button,
     DataTable,
     Input,
+    Label,
     Static,
+    TextArea,
 )
 
 from database import ForumDatabase
+
+
+class NewThreadScreen(ModalScreen[dict | None]):
+    """Modal screen for creating a new thread."""
+
+    CSS = """
+    NewThreadScreen {
+        align: center middle;
+    }
+
+    #new-thread-dialog {
+        width: 70;
+        height: auto;
+        max-height: 80%;
+        padding: 1 2;
+        background: $surface;
+        border: thick $accent;
+    }
+
+    #new-thread-dialog Label {
+        margin-top: 1;
+        color: $text;
+    }
+
+    #new-thread-dialog Input {
+        margin-bottom: 1;
+        width: 100%;
+    }
+
+    #new-thread-dialog TextArea {
+        height: 10;
+        margin-bottom: 1;
+        width: 100%;
+    }
+
+    #new-thread-dialog .dialog-title {
+        text-align: center;
+        text-style: bold;
+        color: $accent;
+        margin-bottom: 1;
+    }
+
+    #new-thread-dialog .button-row {
+        margin-top: 1;
+        align: center middle;
+        height: auto;
+    }
+
+    #new-thread-dialog Button {
+        margin: 0 1;
+    }
+    """
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel"),
+    ]
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="new-thread-dialog"):
+            yield Static("📝 Create New Thread", classes="dialog-title")
+            yield Label("Author:")
+            yield Input(placeholder="Your name...", id="author-input")
+            yield Label("Title:")
+            yield Input(placeholder="Thread title...", id="title-input")
+            yield Label("Body:")
+            yield TextArea(id="body-input")
+            with Horizontal(classes="button-row"):
+                yield Button("✅ Create", id="create-btn", variant="success")
+                yield Button("❌ Cancel", id="cancel-btn", variant="error")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "create-btn":
+            self.action_submit()
+        elif event.button.id == "cancel-btn":
+            self.action_cancel()
+
+    def action_submit(self) -> None:
+        author = self.query_one("#author-input", Input).value.strip()
+        title = self.query_one("#title-input", Input).value.strip()
+        body = self.query_one("#body-input", TextArea).text.strip()
+
+        if not author or not title or not body:
+            return  # Don't submit if fields are empty
+
+        self.dismiss({"author": author, "title": title, "body": body})
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
+class ReplyScreen(ModalScreen[dict | None]):
+    """Modal screen for replying to a thread."""
+
+    CSS = """
+    ReplyScreen {
+        align: center middle;
+    }
+
+    #reply-dialog {
+        width: 70;
+        height: auto;
+        max-height: 80%;
+        padding: 1 2;
+        background: $surface;
+        border: thick $accent;
+    }
+
+    #reply-dialog Label {
+        margin-top: 1;
+        color: $text;
+    }
+
+    #reply-dialog Input {
+        margin-bottom: 1;
+        width: 100%;
+    }
+
+    #reply-dialog TextArea {
+        height: 12;
+        margin-bottom: 1;
+        width: 100%;
+    }
+
+    #reply-dialog .dialog-title {
+        text-align: center;
+        text-style: bold;
+        color: $accent;
+        margin-bottom: 1;
+    }
+
+    #reply-dialog .thread-context {
+        background: $panel;
+        padding: 1;
+        margin-bottom: 1;
+        color: $text-muted;
+    }
+
+    #reply-dialog .button-row {
+        margin-top: 1;
+        align: center middle;
+        height: auto;
+    }
+
+    #reply-dialog Button {
+        margin: 0 1;
+    }
+    """
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel"),
+    ]
+
+    def __init__(self, thread_title: str, thread_id: int):
+        super().__init__()
+        self.thread_title = thread_title
+        self.thread_id = thread_id
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="reply-dialog"):
+            yield Static("💬 Reply to Thread", classes="dialog-title")
+            yield Static(f"📌 {self.thread_title[:50]}", classes="thread-context")
+            yield Label("Author:")
+            yield Input(placeholder="Your name...", id="author-input")
+            yield Label("Reply:")
+            yield TextArea(id="body-input")
+            with Horizontal(classes="button-row"):
+                yield Button("✅ Post Reply", id="reply-btn", variant="success")
+                yield Button("❌ Cancel", id="cancel-btn", variant="error")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "reply-btn":
+            self.action_submit()
+        elif event.button.id == "cancel-btn":
+            self.action_cancel()
+
+    def action_submit(self) -> None:
+        author = self.query_one("#author-input", Input).value.strip()
+        body = self.query_one("#body-input", TextArea).text.strip()
+
+        if not author or not body:
+            return  # Don't submit if fields are empty
+
+        self.dismiss({"author": author, "body": body, "thread_id": self.thread_id})
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
 
 
 class PostCard(Static):
@@ -230,6 +419,8 @@ class ForumViewer(App):
         Binding("q", "quit", "Quit", show=True),
         Binding("l", "show_list", "List Threads", show=True),
         Binding("r", "refresh", "Refresh", show=True),
+        Binding("n", "new_thread", "New Thread", show=True),
+        Binding("p", "reply", "Reply", show=True),
         Binding("?", "help", "Help", show=True),
     ]
 
@@ -258,7 +449,9 @@ class ForumViewer(App):
 
         # List View
         with Container(id="list-view"):
-            yield Static("📋 Thread List", classes="title-bar")
+            with Horizontal(classes="title-bar"):
+                yield Static("📋 Thread List")
+                yield Button("➕ New Thread", id="new-thread-btn", variant="success")
 
             # Thread list table
             table = DataTable(id="thread-table", cursor_type="row")
@@ -272,6 +465,7 @@ class ForumViewer(App):
 
             with Horizontal(classes="action-buttons"):
                 yield Button("⬅️ Back to List", id="back-btn")
+                yield Button("💬 Reply", id="reply-btn", variant="success")
                 yield Button("🔄 Refresh Thread", id="refresh-thread-btn")
 
         yield Static("Ready! Press ? for help", classes="status-bar", id="status-bar")
@@ -408,6 +602,10 @@ class ForumViewer(App):
         elif button_id == "refresh-thread-btn":
             if self.selected_thread_id:
                 await self.view_thread(self.selected_thread_id)
+        elif button_id == "new-thread-btn":
+            await self.action_new_thread()
+        elif button_id == "reply-btn":
+            await self.action_reply()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Handle pressing Enter in the search input."""
@@ -471,15 +669,76 @@ class ForumViewer(App):
             "Keyboard:\n"
             "  L - List threads\n"
             "  R - Refresh current view\n"
+            "  N - Create new thread\n"
+            "  P - Reply to current thread\n"
             "  Q - Quit application\n"
             "  ? - Show this help\n\n"
             "Features:\n"
             "  ✨ View all forum threads\n"
             "  🔍 Search by title/author/content\n"
             "  📌 Read full thread discussions\n"
-            "  💬 See post quotes and replies"
+            "  💬 See post quotes and replies\n"
+            "  📝 Create new threads\n"
+            "  💬 Reply to discussions"
         )
         self.update_status(help_text)
+
+    def action_new_thread(self) -> None:
+        """Open the new thread modal."""
+        self.push_screen(NewThreadScreen(), callback=self._on_new_thread_result)
+
+    def _on_new_thread_result(self, result: dict | None) -> None:
+        """Handle result from new thread modal."""
+        if result:
+            try:
+                thread_id = self.db.create_thread(
+                    title=result["title"],
+                    body=result["body"],
+                    author=result["author"],
+                )
+                self.update_status(f"✅ Thread created! ID: {thread_id}")
+                self.load_threads()
+                # View the new thread - schedule it as a callback
+                self.call_later(self._go_to_thread, thread_id)
+            except Exception as e:
+                self.update_status(f"❌ Error creating thread: {e}")
+
+    def _go_to_thread(self, thread_id: int) -> None:
+        """Navigate to a thread (scheduled callback)."""
+        # Use set_timer to allow the UI to settle before navigating
+        self.set_timer(0.1, lambda: self._do_view_thread(thread_id))
+
+    def _do_view_thread(self, thread_id: int) -> None:
+        """Actually view the thread."""
+        import asyncio
+        asyncio.create_task(self.view_thread(thread_id))
+
+    def action_reply(self) -> None:
+        """Open the reply modal for the current thread."""
+        if self.current_view != "thread" or not self.current_thread:
+            self.update_status("❌ Open a thread first to reply (press P in thread view)")
+            return
+
+        thread_info = self.current_thread["thread"]
+        self.push_screen(
+            ReplyScreen(thread_title=thread_info["title"], thread_id=thread_info["id"]),
+            callback=self._on_reply_result,
+        )
+
+    def _on_reply_result(self, result: dict | None) -> None:
+        """Handle result from reply modal."""
+        if result:
+            try:
+                post_id = self.db.create_post(
+                    thread_id=result["thread_id"],
+                    body=result["body"],
+                    author=result["author"],
+                )
+                self.update_status(f"✅ Reply posted! Post ID: {post_id}")
+                # Refresh the thread view
+                self.call_later(self._go_to_thread, result["thread_id"])
+            except Exception as e:
+                self.update_status(f"❌ Error posting reply: {e}")
 
 
 def main():
