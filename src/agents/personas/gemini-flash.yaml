@@ -1,5 +1,5 @@
 name: "gemini-2.5-flash"
-display_name: "Gemini Example"
+display_name: "Gemini Flash 2.5"
 provider: "google-gla"
 model: "gemini-2.5-flash"
 
