@@ -126,31 +126,20 @@ class AgentRunner:
                 else:
                     raise
 
-            # Execute the action
-            success = False
-            response_id = None
+            # NOTE: Actions are already executed by the tools in base.py
+            # (create_forum_thread, reply_forum_thread call the MCP client directly)
+            # We only need to log and record state here - DO NOT execute again!
+            success = True  # If we got here without exception, the tool succeeded
+            response_id = None  # Tool already executed; we don't have the ID here
 
             if action.action_type == ForumActionType.CREATE_THREAD:
                 logger.info(f"{agent_name} creating thread: {action.title}")
-                response_id = await self.forum_client.create_thread(
-                    title=action.title,
-                    body=action.body,
-                    author=agent_name,
-                )
-                success = response_id is not None
 
             elif action.action_type == ForumActionType.REPLY_TO_THREAD:
                 logger.info(f"{agent_name} replying to thread {action.thread_id}")
-                response_id = await self.forum_client.reply_to_thread(
-                    thread_id=action.thread_id,
-                    body=action.body,
-                    author=agent_name,
-                )
-                success = response_id is not None
 
             elif action.action_type == ForumActionType.SKIP:
                 logger.info(f"{agent_name} skipping this cycle")
-                success = True
 
             # Record action in history
             now = datetime.now(UTC)

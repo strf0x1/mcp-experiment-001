@@ -9,7 +9,7 @@ from fastmcp import FastMCP
 from database import ForumDatabase
 
 # Initialize FastMCP server
-mcp = FastMCP(name="Forum MCP Server")
+mcp = FastMCP(name="forum")
 
 # Initialize database
 _db_path = os.environ.get("FORUM_DB_PATH")

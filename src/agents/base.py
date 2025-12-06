@@ -296,8 +296,18 @@ class GrafitiMCPClient:
 
         try:
             result = await self._client.call_tool(tool_name, arguments)
-            # FastMCP returns CallToolResult with .data attribute containing parsed result
-            return result.data if hasattr(result, "data") else result
+            # FastMCP returns CallToolResult with structured_content (dict) or data (Pydantic model)
+            # Prefer structured_content as it's already a dict, otherwise convert Pydantic model
+            if hasattr(result, "structured_content") and result.structured_content:
+                return result.structured_content
+            elif hasattr(result, "data") and result.data:
+                # Convert Pydantic model to dict if needed
+                data = result.data
+                if hasattr(data, "model_dump"):
+                    return data.model_dump()
+                return data
+            # Fallback: return empty dict
+            return {}
         except Exception as e:
             logger.error(f"Failed to call Grafiti tool {tool_name}: {e}")
             raise
@@ -332,7 +342,7 @@ class GrafitiMCPClient:
         if group_id:
             args["group_id"] = group_id
 
-        return await self._call_tool("add_episode", args)
+        return await self._call_tool("add_memory", args)
 
     async def search_nodes(
         self,
@@ -376,7 +386,7 @@ class GrafitiMCPClient:
         if group_id:
             args["group_id"] = group_id
 
-        return await self._call_tool("search_facts", args)
+        return await self._call_tool("search_memory_facts", args)
 
     async def get_episodes(
         self,
@@ -630,7 +640,22 @@ def create_agent(
             source: str = "text",
             source_description: str | None = None,
         ) -> str:
-            """Add an episode to the Grafiti knowledge graph to store information for later retrieval."""
+            """Add an episode to the Grafiti knowledge graph for persistent memory across sessions.
+
+            Use this to store important information, insights, decisions, or context that should be
+            remembered long-term. The knowledge graph automatically extracts entities and relationships
+            from your content. Episodes are processed asynchronously in the background.
+
+            Args:
+                name: A short descriptive title for this episode (e.g., "User Preference Update")
+                episode_body: The content to store. For source='json', must be a valid JSON string.
+                source: Content type - 'text' (default) for prose, 'json' for structured data,
+                       'message' for conversation-style content
+                source_description: Optional context about the source (e.g., "forum discussion", "user request")
+
+            Returns:
+                Confirmation that the episode was queued for processing.
+            """
             _check_tool_limit()
             _log_tool_call(
                 "add_grafiti_episode",
@@ -652,7 +677,18 @@ def create_agent(
 
         @agent.tool_plain
         async def search_grafiti_nodes(query: str, limit: int = 10) -> str:
-            """Search the Grafiti knowledge graph for relevant node summaries about entities, concepts, or topics."""
+            """Search for entity nodes in the knowledge graph (people, places, concepts, topics, etc.).
+
+            Use this to find specific entities and their summaries. Nodes represent discrete "things"
+            that have been extracted from episodes. Good for questions like "What do we know about X?"
+
+            Args:
+                query: Natural language search query describing what you're looking for
+                limit: Maximum number of nodes to return (default: 10)
+
+            Returns:
+                JSON with matching node summaries and their metadata.
+            """
             _check_tool_limit()
             _log_tool_call("search_grafiti_nodes", query=query, limit=limit)
             try:
@@ -663,7 +699,19 @@ def create_agent(
 
         @agent.tool_plain
         async def search_grafiti_facts(query: str, limit: int = 10) -> str:
-            """Search the Grafiti knowledge graph for relevant facts (relationships between entities)."""
+            """Search for facts (relationships between entities) in the knowledge graph.
+
+            Use this to find how entities relate to each other. Facts are edges connecting nodes,
+            representing relationships like "works at", "is located in", "prefers", etc.
+            Good for questions like "How is X related to Y?" or "What relationships involve X?"
+
+            Args:
+                query: Natural language search query describing the relationships you're looking for
+                limit: Maximum number of facts to return (default: 10)
+
+            Returns:
+                JSON with matching facts showing entity relationships and their context.
+            """
             _check_tool_limit()
             _log_tool_call("search_grafiti_facts", query=query, limit=limit)
             try:
@@ -674,7 +722,17 @@ def create_agent(
 
         @agent.tool_plain
         async def get_grafiti_episodes(limit: int = 10) -> str:
-            """Get the most recent episodes stored in the Grafiti knowledge graph."""
+            """Retrieve the most recent episodes from the knowledge graph.
+
+            Use this to review what information has been recently stored, or to get context
+            about recent memory additions. Episodes are the raw content that was ingested.
+
+            Args:
+                limit: Maximum number of episodes to return (default: 10)
+
+            Returns:
+                JSON with recent episodes including their names, content, and metadata.
+            """
             _check_tool_limit()
             _log_tool_call("get_grafiti_episodes", limit=limit)
             try:
@@ -685,7 +743,13 @@ def create_agent(
 
         @agent.tool_plain
         async def get_grafiti_status() -> str:
-            """Get the status of the Grafiti MCP server and database connection."""
+            """Check the health and status of the Grafiti knowledge graph service.
+
+            Use this to verify the memory system is operational before relying on it.
+
+            Returns:
+                JSON with server status and database connection information.
+            """
             _check_tool_limit()
             _log_tool_call("get_grafiti_status")
             try:
