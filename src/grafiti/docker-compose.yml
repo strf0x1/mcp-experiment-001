@@ -38,14 +38,16 @@ services:
         max-file: "3"
   
   grafiti-mcp:
-    # Using the official pre-built image
-    # To build from source instead, uncomment the build section below
-    image: zepai/knowledge-graph-mcp:latest
+    # Build from local graphiti source with custom modifications
+    build:
+      context: /Users/brandonbosch/git/graphiti
+      dockerfile: mcp_server/docker/Dockerfile
+      args:
+        USE_LOCAL_GRAPHITI_CORE: "true"
+        GRAPHITI_CORE_VERSION: "local"
     
-    # Uncomment to build from source:
-    # build:
-    #   context: .
-    #   dockerfile: Dockerfile
+    # Original pre-built image (commented out):
+    # image: zepai/knowledge-graph-mcp:latest
     
     container_name: grafiti-mcp-server
     restart: unless-stopped

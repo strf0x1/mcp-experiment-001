@@ -319,6 +319,7 @@ class GrafitiMCPClient:
         source: str = "text",
         source_description: str | None = None,
         group_id: str | None = None,
+        metadata: dict | None = None,
     ) -> dict:
         """Add an episode to the knowledge graph.
 
@@ -328,6 +329,7 @@ class GrafitiMCPClient:
             source: Source type - "text", "json", or "message"
             source_description: Optional description of the source
             group_id: Optional group ID for namespacing
+            metadata: Optional dict of custom metadata (significance tags, beliefs, etc.)
 
         Returns:
             Result dict with episode information
@@ -341,6 +343,8 @@ class GrafitiMCPClient:
             args["source_description"] = source_description
         if group_id:
             args["group_id"] = group_id
+        if metadata:
+            args["metadata"] = metadata
 
         return await self._call_tool("add_memory", args)
 
@@ -639,6 +643,7 @@ def create_agent(
             episode_body: str,
             source: str = "text",
             source_description: str | None = None,
+            metadata: dict | None = None,
         ) -> str:
             """Add an episode to the Grafiti knowledge graph for persistent memory across sessions.
 
@@ -652,6 +657,8 @@ def create_agent(
                 source: Content type - 'text' (default) for prose, 'json' for structured data,
                        'message' for conversation-style content
                 source_description: Optional context about the source (e.g., "forum discussion", "user request")
+                metadata: Optional dict for custom metadata. Use for significance tags, belief tracking, etc.
+                         Example: {"significance": "shift", "prior_belief": "X", "new_belief": "Y"}
 
             Returns:
                 Confirmation that the episode was queued for processing.
@@ -663,6 +670,7 @@ def create_agent(
                 episode_body=episode_body,
                 source=source,
                 source_description=source_description,
+                metadata=metadata,
             )
             try:
                 result = await grafiti_client.add_episode(
@@ -670,6 +678,7 @@ def create_agent(
                     episode_body=episode_body,
                     source=source,
                     source_description=source_description,
+                    metadata=metadata,
                 )
                 return json.dumps(result, indent=2)
             except Exception as e:
